@@ -16,8 +16,11 @@ def init_db():
     try:
         creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
         if creds_json:
-            creds_dict = json.loads(creds_json)
-            creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+            if creds_json.endswith('.json'):
+                creds = Credentials.from_service_account_file(creds_json, scopes=SCOPES)
+            else:
+                creds_dict = json.loads(creds_json)
+                creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         else:
             if os.path.exists('credentials.json'):
                 creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
@@ -47,6 +50,25 @@ def init_db():
                     ws.append_row(["festival_id", "date", "name", "type"])
                 elif rs == "Video Logs":
                     ws.append_row(["log_id", "customer_id", "festival_id", "video_url", "sent_status", "sent_at"])
+        
+        users_ws = sheet.worksheet("Users")
+        if len(users_ws.get_all_records()) == 0:
+            import bcrypt, uuid
+            from datetime import datetime
+            pw_hash = bcrypt.hashpw("adminpassword123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            users_ws.append_row([str(uuid.uuid4()), "Admin User", "admin@example.com", pw_hash, "Admin", "System", datetime.utcnow().isoformat()])
+            logger.info("Seeded default Admin user: admin@example.com")
+            
+        festivals_ws = sheet.worksheet("Festivals")
+        if len(festivals_ws.get_all_records()) == 0:
+            import uuid
+            festivals_ws.append_row([str(uuid.uuid4()), "2026-05-27", "Eid-ul-Adha", "Religious"])
+            festivals_ws.append_row([str(uuid.uuid4()), "2026-06-26", "Muharram", "Religious"])
+            festivals_ws.append_row([str(uuid.uuid4()), "2026-06-29", "Rath Yatra", "Religious"])
+            festivals_ws.append_row([str(uuid.uuid4()), "2026-07-29", "Raksha Bandhan", "Cultural"])
+            festivals_ws.append_row([str(uuid.uuid4()), "2026-08-05", "Janmashtami", "Religious"])
+            logger.info("Seeded default festivals.")
+            
         return sheet
     except Exception as e:
         logger.error(f"Error initializing database: {e}")

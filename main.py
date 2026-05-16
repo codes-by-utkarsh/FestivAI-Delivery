@@ -33,6 +33,12 @@ class UserCreate(BaseModel):
     password: str
     role: str
 
+class RegisterData(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str
+
 class SendWhatsAppRequest(BaseModel):
     customer_id: str
     festival_name: str
@@ -61,6 +67,35 @@ def login(data: LoginData):
                 raise HTTPException(status_code=401, detail="Incorrect password")
                 
     raise HTTPException(status_code=401, detail="User not found")
+
+@app.post("/register")
+def register(user: RegisterData):
+    if user.role == "Admin":
+        raise HTTPException(status_code=403, detail="Admin registration is restricted to internal dashboard creation only.")
+        
+    sheet = init_db()
+    if not sheet:
+        raise HTTPException(status_code=500, detail="DB Error")
+    users_ws = get_users_sheet(sheet)
+    users = users_ws.get_all_records()
+    
+    if any(u.get("email") == user.email for u in users):
+        raise HTTPException(status_code=400, detail="Email already registered")
+        
+    agent_count = sum(1 for u in users if u.get("role") == "Agent")
+    
+    if user.role == "Agent" and agent_count >= 30:
+        raise HTTPException(status_code=400, detail="Maximum Agent limit reached (30)")
+        
+    user_id = str(uuid.uuid4())
+    pw_hash = hash_password(user.password)
+    
+    users_ws.append_row([
+        user_id, user.name, user.email, pw_hash, user.role, "Self", datetime.utcnow().isoformat()
+    ])
+    
+    token = create_access_token({"sub": user.email, "role": user.role, "user_id": user_id})
+    return {"access_token": token, "token_type": "bearer", "role": user.role}
 
 @app.post("/users", dependencies=[Depends(require_role(["Admin"]))])
 def create_user(user: UserCreate, current_user: dict = Depends(require_role(["Admin"]))):
@@ -190,6 +225,75 @@ def send_whatsapp_direct(req: SendWhatsAppRequest, current_user: dict = Depends(
             break
             
     return {"message": "WhatsApp video generated and dispatched successfully", "media_id": media_id}
+
+@app.get("/stats", dependencies=[Depends(require_role(["Admin", "Agent"]))])
+def get_stats(current_user: dict = Depends(require_role(["Admin", "Agent"]))):
+    sheet = init_db()
+    customers_ws = get_customers_sheet(sheet)
+    users_ws = get_users_sheet(sheet)
+    logs_ws = sheet.worksheet("Video Logs")
+    
+    customers = customers_ws.get_all_records()
+    users = users_ws.get_all_records()
+    logs = logs_ws.get_all_records()
+    
+    if current_user.get("role") == "Agent":
+        customers = [c for c in customers if str(c.get("agent_id")) == str(current_user.get("user_id"))]
+        logs = [l for l in logs if str(l.get("customer_id")) in [str(c.get("customer_id")) for c in customers]]
+        
+    active_agents = len([u for u in users if u.get("role") == "Agent"])
+    videos_generated = len(logs)
+    whatsapp_sent = len([l for l in logs if l.get("sent_status") == "Sent"])
+    
+    return {
+        "total_companies": len(customers),
+        "active_agents": active_agents,
+        "videos_generated": videos_generated,
+        "whatsapp_sent": whatsapp_sent
+    }
+
+@app.get("/festivals", dependencies=[Depends(require_role(["Admin", "Agent"]))])
+def get_festivals(current_user: dict = Depends(require_role(["Admin", "Agent"]))):
+    sheet = init_db()
+    festivals_ws = sheet.worksheet("Festivals")
+    return {"festivals": festivals_ws.get_all_records()}
+
+@app.get("/users-list", dependencies=[Depends(require_role(["Admin"]))])
+def get_users_list(current_user: dict = Depends(require_role(["Admin"]))):
+    sheet = init_db()
+    users_ws = get_users_sheet(sheet)
+    users = users_ws.get_all_records()
+    return {"users": [{"name": u.get("name"), "email": u.get("email"), "role": u.get("role")} for u in users]}
+
+@app.get("/logs", dependencies=[Depends(require_role(["Admin", "Agent"]))])
+def get_logs(current_user: dict = Depends(require_role(["Admin", "Agent"]))):
+    sheet = init_db()
+    logs_ws = sheet.worksheet("Video Logs")
+    customers_ws = get_customers_sheet(sheet)
+    festivals_ws = sheet.worksheet("Festivals")
+    
+    logs = logs_ws.get_all_records()
+    customers = {str(c.get("customer_id")): c for c in customers_ws.get_all_records()}
+    festivals = {str(f.get("festival_id")): f.get("name") for f in festivals_ws.get_all_records()}
+    
+    result = []
+    for l in logs:
+        cid = str(l.get("customer_id"))
+        fid = str(l.get("festival_id"))
+        cust = customers.get(cid, {})
+        
+        if current_user.get("role") == "Agent" and str(cust.get("agent_id")) != str(current_user.get("user_id")):
+            continue
+            
+        result.append({
+            "log_id": l.get("log_id"),
+            "company_name": cust.get("company_name", "Unknown Company"),
+            "whatsapp": cust.get("whatsapp", "N/A"),
+            "festival_name": festivals.get(fid, "Festival"),
+            "sent_status": l.get("sent_status"),
+            "sent_at": l.get("sent_at")
+        })
+    return {"logs": result}
 
 if __name__ == "__main__":
     import uvicorn
