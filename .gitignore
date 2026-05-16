@@ -1,0 +1,39 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# API Credentials & Keys
+credentials.json
+*.pem
+*.key
+*.p12
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# User Uploads
+uploads/*
+!uploads/.gitkeep
+generated_videos/*
+!generated_videos/.gitkeep
+
+# Node.js (Frontend)
+frontend_app/node_modules/
+frontend_app/dist/
+frontend_app/.env.local
+frontend_app/.env.development.local
+frontend_app/.env.test.local
+frontend_app/.env.production.local
+
+# OS Files
+.DS_Store
+Thumbs.db

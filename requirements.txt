@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+gspread
+pyjwt
+bcrypt
+python-multipart
+moviepy==1.0.3
+opencv-python
+pillow
+gTTS
+apscheduler
+requests
+python-dotenv
+google-auth
