@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token'))
   const [activeTab, setActiveTab] = useState('dashboard')
   const [companies, setCompanies] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDispatching, setIsDispatching] = useState(false)
 
   useEffect(() => {
     if (token) fetchCompanies()
@@ -18,7 +22,7 @@ export default function App() {
     const password = e.target.password.value
     
     try {
-      const res = await fetch('http://localhost:8080/login', {
+      const res = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -47,7 +51,7 @@ export default function App() {
 
   const fetchCompanies = async () => {
     try {
-      const res = await fetch('http://localhost:8080/customers', {
+      const res = await fetch(`${API_BASE}/customers`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (res.ok) {
@@ -61,9 +65,81 @@ export default function App() {
     }
   }
 
+  const handleCreateCompany = async (e) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    
+    const formData = new FormData(e.target)
+    const photos = e.target.photos.files
+    
+    if (photos.length < 8 || photos.length > 10) {
+      alert("Please select between 8 and 10 photos for the video engine.")
+      setIsSubmitting(false)
+      return
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/customers`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      })
+
+      if (res.ok) {
+        alert("✅ Company onboarded successfully!")
+        setIsModalOpen(false)
+        fetchCompanies()
+      } else {
+        const err = await res.json()
+        alert(`❌ Onboarding failed: ${err.detail || 'Server error'}. (Falling back to demo mode)`)
+        setIsModalOpen(false)
+      }
+    } catch (error) {
+      alert("❌ Network error connecting to backend API. (Demo mode fallback active)")
+      setIsModalOpen(false)
+    }
+    setIsSubmitting(false)
+  }
+
+  const handleSendDirectWhatsApp = async (customerId, festivalName) => {
+    if (!customerId || customerId.startsWith('mock')) {
+      alert(`Demo Mode: Instant WhatsApp Dispatch simulated successfully for ${festivalName}! (Connect live DB to send real WhatsApp)`);
+      return;
+    }
+    
+    setIsDispatching(true)
+    alert(`Generating video for ${festivalName} and dispatching to WhatsApp... This may take 30-60 seconds.`)
+    
+    try {
+      const res = await fetch(`${API_BASE}/send-whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          customer_id: customerId,
+          festival_name: festivalName,
+          template_name: "hello_world"
+        })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        alert(`✅ Video successfully generated and delivered! Meta Media ID: ${data.media_id}`)
+      } else {
+        const err = await res.json()
+        alert(`❌ Failed to send WhatsApp: ${err.detail || 'API Error'}`)
+      }
+    } catch (error) {
+      alert('❌ Network error while connecting to the video engine server.')
+    }
+    setIsDispatching(false)
+  }
+
   const mockCompanies = [
-    {company_name: "Sharma Electronics", owner_name: "Rahul Sharma", whatsapp: "+91 98765 43210", address: "Mumbai", subscription_end: "2026-12-31"},
-    {company_name: "Patel Textiles", owner_name: "Vikram Patel", whatsapp: "+91 91234 56789", address: "Ahmedabad", subscription_end: "2025-06-15"}
+    {customer_id: "mock-1", company_name: "Sharma Electronics", owner_name: "Rahul Sharma", whatsapp: "+91 98765 43210", address: "Mumbai", subscription_end: "2026-12-31"},
+    {customer_id: "mock-2", company_name: "Patel Textiles", owner_name: "Vikram Patel", whatsapp: "+91 91234 56789", address: "Ahmedabad", subscription_end: "2025-06-15"}
   ]
 
   if (!token) {
@@ -221,10 +297,19 @@ export default function App() {
                         <div className="w-10 h-10 rounded-lg bg-[#f05c42] flex items-center justify-center text-white shadow-sm"><i className="fa-regular fa-calendar"></i></div>
                         <div>
                           <p className="font-bold text-slate-800 text-sm">{f.name}</p>
-                          <p className="text-xs text-slate-500">{f.date}</p>
+                          <p className="text-xs text-slate-50 text-slate-500">{f.date}</p>
                         </div>
                       </div>
-                      <span className="text-xs font-medium text-slate-400">{f.days}</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs font-medium text-slate-400">{f.days}</span>
+                        <button 
+                          onClick={() => handleSendDirectWhatsApp(companies[0]?.customer_id, f.name)}
+                          disabled={isDispatching}
+                          className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition-colors"
+                        >
+                          <i className="fa-brands fa-whatsapp text-sm"></i> {isDispatching ? "Sending..." : "Dispatch Now"}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -242,16 +327,29 @@ export default function App() {
 
               <div className="grid grid-cols-3 gap-6">
                 {companies.map((c, i) => (
-                  <div key={i} className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-12 h-12 rounded-lg bg-blue-600 text-white flex justify-center items-center font-bold text-xl">{c.company_name?.charAt(0) || 'C'}</div>
-                      <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-bold">Active</span>
+                  <div key={i} className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="w-12 h-12 rounded-lg bg-blue-600 text-white flex justify-center items-center font-bold text-xl">{c.company_name?.charAt(0) || 'C'}</div>
+                        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-bold">Active</span>
+                      </div>
+                      <h3 className="font-bold text-lg text-slate-800">{c.company_name}</h3>
+                      <p className="text-xs text-slate-500 mb-4">{c.owner_name}</p>
+                      <div className="text-xs text-slate-600 space-y-2 mb-6">
+                        <div className="flex items-center gap-2"><i className="fa-solid fa-phone text-slate-400 w-3"></i> {c.whatsapp}</div>
+                        <div className="flex items-center gap-2"><i className="fa-solid fa-location-dot text-slate-400 w-3"></i> {c.address}</div>
+                      </div>
                     </div>
-                    <h3 className="font-bold text-lg text-slate-800">{c.company_name}</h3>
-                    <p className="text-xs text-slate-500 mb-4">{c.owner_name}</p>
-                    <div className="text-xs text-slate-600 space-y-2">
-                      <div className="flex items-center gap-2"><i className="fa-solid fa-phone text-slate-400 w-3"></i> {c.whatsapp}</div>
-                      <div className="flex items-center gap-2"><i className="fa-solid fa-location-dot text-slate-400 w-3"></i> {c.address}</div>
+                    
+                    <div className="border-t border-gray-50 pt-4 flex justify-between items-center">
+                      <span className="text-[10px] text-slate-400">Ends: {c.subscription_end}</span>
+                      <button 
+                        onClick={() => handleSendDirectWhatsApp(c.customer_id, "Eid-ul-Adha")}
+                        disabled={isDispatching}
+                        className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition-colors"
+                      >
+                        <i className="fa-brands fa-whatsapp"></i> {isDispatching ? "Sending..." : "Send Video"}
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -388,16 +486,19 @@ export default function App() {
               <h3 className="font-bold text-xl text-slate-900">Add Company</h3>
               <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-400"><i className="fa-solid fa-xmark"></i></button>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); setIsModalOpen(false); alert('Demo mode: Company scheduled.'); }} className="p-6 space-y-5">
+            <form onSubmit={handleCreateCompany} className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Company Name</label><input className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
-                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Owner Name</label><input className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
-                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">WhatsApp Number</label><input className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
-                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Subscription Until</label><input type="date" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Company Name</label><input name="company_name" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Owner Name</label><input name="owner_name" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">WhatsApp Number</label><input name="whatsapp" placeholder="e.g. 919876543210" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Subscription Until</label><input name="subscription_end" type="date" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Company Address</label><input name="address" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Company Logo</label><input name="logo" type="file" accept="image/*" className="w-full bg-slate-50 border border-gray-200 p-1.5 rounded-lg text-sm" required/></div>
+                <div className="col-span-2"><label className="block text-xs font-bold text-slate-700 mb-1.5">Product/Company Photos (Select 8 to 10 photos)</label><input name="photos" type="file" accept="image/*" multiple className="w-full bg-slate-50 border border-gray-200 p-1.5 rounded-lg text-sm" required/></div>
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t border-gray-100 mt-6">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg font-bold">Cancel</button>
-                <button type="submit" className="px-5 py-2 text-sm bg-orange-500 text-white rounded-lg font-bold">Save Company</button>
+                <button type="submit" disabled={isSubmitting} className="px-5 py-2 text-sm bg-orange-500 text-white rounded-lg font-bold shadow hover:bg-orange-600 transition-colors">{isSubmitting ? "Uploading assets..." : "Save Company"}</button>
               </div>
             </form>
           </div>
