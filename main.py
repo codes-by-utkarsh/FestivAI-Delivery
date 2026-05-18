@@ -229,6 +229,9 @@ def get_customers(current_user: dict = Depends(require_role(["Admin", "Agent"]))
     # Filter out empty/blank rows from Google Sheets
     customers = [c for c in raw_customers if c.get("customer_id")]
     logger.info(f"[get_customers] Called by user_id: '{current_user.get('user_id')}', role: '{current_user.get('role')}'. Total raw customers: {len(raw_customers)}")
+    if raw_customers:
+        logger.info(f"[get_customers] First raw customer keys: {list(raw_customers[0].keys())}")
+        logger.info(f"[get_customers] First raw customer data: {raw_customers[0]}")
 
     if current_user.get("role") == "Agent":
         agent_id = str(current_user.get("user_id"))
