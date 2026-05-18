@@ -13,7 +13,7 @@ from fastapi import UploadFile, File, Form
 from typing import List, Optional
 import logging
 
-dotenv.load_dotenv()
+dotenv.load_dotenv(override=True)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="FestivAI Delivery API", version="1.0.0")
@@ -58,6 +58,17 @@ class SendWhatsAppRequest(BaseModel):
 class GenerateVideoRequest(BaseModel):
     customer_id: str
     festival_name: str
+
+class BulkGenerateRequest(BaseModel):
+    customer_ids: List[str]
+    festival_name: str
+    send_whatsapp: bool = False
+    template_name: str = "hello_world"
+
+class AddFestivalRequest(BaseModel):
+    name: str
+    date: str          # YYYY-MM-DD
+    type: str = "Custom"
 
 
 # ─── Startup ──────────────────────────────────────────────────────────────────
@@ -299,9 +310,23 @@ def get_festivals(current_user: dict = Depends(require_role(["Admin", "Agent"]))
     sheet = init_db()
     festivals_ws = sheet.worksheet("Festivals")
     festivals = festivals_ws.get_all_records()
-    # Sort by date
     festivals.sort(key=lambda x: x.get("date", ""))
     return {"festivals": festivals}
+
+
+@app.post("/festivals", dependencies=[Depends(require_role(["Admin", "Agent"]))])
+def add_festival(
+    req: AddFestivalRequest,
+    current_user: dict = Depends(require_role(["Admin", "Agent"]))
+):
+    """Add a custom festival to the calendar."""
+    sheet = init_db()
+    if not sheet:
+        raise HTTPException(status_code=500, detail="Database connection failed.")
+    festivals_ws = sheet.worksheet("Festivals")
+    festival_id = str(uuid.uuid4())
+    festivals_ws.append_row([festival_id, req.date, req.name, req.type])
+    return {"message": "Festival added.", "festival_id": festival_id}
 
 
 # ─── Video Generation ─────────────────────────────────────────────────────────
@@ -438,6 +463,119 @@ def send_whatsapp_direct(
         "media_id": media_id,
         "photo_used": next_photo_idx,
         "sent_to": customer.get("whatsapp")
+    }
+
+
+# ─── Bulk Video Generation ────────────────────────────────────────────────────
+
+@app.post("/bulk-generate-videos", dependencies=[Depends(require_role(["Admin", "Agent"]))])
+def bulk_generate_videos(
+    req: BulkGenerateRequest,
+    current_user: dict = Depends(require_role(["Admin", "Agent"]))
+):
+    """
+    Generate festival videos for multiple selected companies.
+    Optionally send via WhatsApp immediately after generation.
+    Returns per-company result summary.
+    """
+    sheet = init_db()
+    if not sheet:
+        raise HTTPException(status_code=500, detail="Database connection failed.")
+
+    customers_ws = get_customers_sheet(sheet)
+    all_customers = customers_ws.get_all_records()
+    logs_ws = sheet.worksheet("Video Logs")
+    festivals_ws = sheet.worksheet("Festivals")
+    festivals = festivals_ws.get_all_records()
+    festival_match = next((f for f in festivals if f.get("name") == req.festival_name), None)
+    festival_id = festival_match.get("festival_id") if festival_match else "manual"
+
+    from video_engine import generate_video, get_next_photo_index
+    from scheduler import upload_video_to_meta, send_whatsapp_video
+
+    results = []
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+
+    for cid in req.customer_ids:
+        customer = next(
+            (c for c in all_customers if str(c.get("customer_id")) == cid), None
+        )
+        if not customer:
+            results.append({"customer_id": cid, "status": "error", "detail": "Not found"})
+            continue
+
+        # RBAC: Agents can only process their own customers
+        if current_user.get("role") == "Agent" and \
+           str(customer.get("agent_id")) != str(current_user.get("user_id")):
+            results.append({"customer_id": cid, "status": "error",
+                            "detail": "Forbidden – not your customer"})
+            continue
+
+        # Subscription check
+        sub_end = str(customer.get("subscription_end", ""))
+        if not sub_end or today > sub_end:
+            results.append({"customer_id": cid, "company_name": customer.get("company_name"),
+                            "status": "skipped", "detail": "Subscription expired"})
+            continue
+
+        last_used  = int(customer.get("last_used_photo") or 0)
+        next_idx   = get_next_photo_index(last_used)
+        video_path = generate_video(customer, req.festival_name, next_idx)
+
+        if not video_path:
+            results.append({"customer_id": cid, "company_name": customer.get("company_name"),
+                            "status": "error", "detail": "Video generation failed"})
+            continue
+
+        # Update photo index in DB
+        for idx, c in enumerate(all_customers):
+            if str(c.get("customer_id")) == cid:
+                customers_ws.update_cell(idx + 2, 19, next_idx)
+                break
+
+        if not req.send_whatsapp:
+            results.append({"customer_id": cid, "company_name": customer.get("company_name"),
+                            "status": "generated", "video_path": video_path})
+            continue
+
+        # Upload + send WhatsApp
+        media_id = upload_video_to_meta(video_path)
+        if os.path.exists(video_path):
+            os.remove(video_path)
+
+        wa_success = False
+        if media_id:
+            wa_success = send_whatsapp_video(
+                customer.get("whatsapp"), media_id, template_name=req.template_name
+            )
+
+        log_id = str(uuid.uuid4())
+        logs_ws.append_row([
+            log_id, cid, festival_id,
+            media_id or "Upload Failed",
+            "Sent" if wa_success else "Failed",
+            datetime.utcnow().isoformat()
+        ])
+
+        results.append({
+            "customer_id": cid,
+            "company_name": customer.get("company_name"),
+            "whatsapp": customer.get("whatsapp"),
+            "status": "sent" if wa_success else "upload_failed",
+            "media_id": media_id,
+        })
+
+    sent   = sum(1 for r in results if r.get("status") == "sent")
+    gen    = sum(1 for r in results if r.get("status") == "generated")
+    errors = sum(1 for r in results if r.get("status") in ("error", "upload_failed"))
+
+    return {
+        "festival": req.festival_name,
+        "total": len(req.customer_ids),
+        "sent": sent,
+        "generated": gen,
+        "errors": errors,
+        "results": results,
     }
 
 

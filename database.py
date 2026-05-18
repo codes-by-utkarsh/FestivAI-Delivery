@@ -3,6 +3,8 @@ import os
 import json
 from google.oauth2.service_account import Credentials
 import logging
+import dotenv
+dotenv.load_dotenv(override=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -89,7 +91,12 @@ INDIAN_FESTIVALS_2025_2026 = [
     {"date": "2026-12-31", "name": "New Year's Eve", "type": "Cultural"},
 ]
 
+_CACHED_SHEET = None
+
 def init_db():
+    global _CACHED_SHEET
+    if _CACHED_SHEET is not None:
+        return _CACHED_SHEET
     try:
         creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
         if creds_json:
@@ -151,6 +158,7 @@ def init_db():
             festivals_ws.append_rows(rows)
             logger.info(f"Seeded {len(rows)} festivals into the calendar.")
             
+        _CACHED_SHEET = sheet
         return sheet
     except Exception as e:
         logger.error(f"Error initializing database: {e}")

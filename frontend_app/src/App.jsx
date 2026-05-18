@@ -41,6 +41,15 @@ export default function App() {
   const [dashboardSelectedFestival, setDashboardSelectedFestival] = useState('')
   const [companyTabSelectedFestival, setCompanyTabSelectedFestival] = useState({})
 
+  // Bulk Generation
+  const [selectedCompanies, setSelectedCompanies] = useState(new Set())
+  const [bulkFestival, setBulkFestival] = useState('')
+  const [isBulkDispatching, setIsBulkDispatching] = useState(false)
+  const [bulkResults, setBulkResults] = useState(null)
+
+  // Festival Management
+  const [isAddFestivalOpen, setIsAddFestivalOpen] = useState(false)
+
   useEffect(() => {
     if (token) {
       fetchAllData()
@@ -336,6 +345,68 @@ export default function App() {
       alert('❌ Network error while connecting to the video engine server.')
     }
     setIsDispatching(false)
+  }
+
+  const toggleCompany = (id) => {
+    setSelectedCompanies(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleAllCompanies = () => {
+    if (selectedCompanies.size === companies.length) {
+      setSelectedCompanies(new Set())
+    } else {
+      setSelectedCompanies(new Set(companies.map(c => c.customer_id)))
+    }
+  }
+
+  const handleBulkDispatch = async (sendWhatsapp) => {
+    if (selectedCompanies.size === 0) { alert('Select at least one company.'); return }
+    if (!bulkFestival) { alert('Select a festival first.'); return }
+    setIsBulkDispatching(true)
+    setBulkResults(null)
+    try {
+      const res = await fetch(`${API_BASE}/bulk-generate-videos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          customer_ids: [...selectedCompanies],
+          festival_name: bulkFestival,
+          send_whatsapp: sendWhatsapp,
+          template_name: 'hello_world'
+        })
+      })
+      const data = await res.json()
+      if (res.ok) { setBulkResults(data); fetchAllData() }
+      else alert(`❌ Bulk operation failed: ${data.detail || 'Server error'}`)
+    } catch { alert('❌ Network error.') }
+    setIsBulkDispatching(false)
+  }
+
+  const handleAddFestival = async (e) => {
+    e.preventDefault()
+    const name = e.target.fest_name.value
+    const date = e.target.fest_date.value
+    const type = e.target.fest_type.value
+    try {
+      const res = await fetch(`${API_BASE}/festivals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ name, date, type })
+      })
+      if (res.ok) {
+        alert(`✅ Festival "${name}" added!`)
+        setIsAddFestivalOpen(false)
+        fetchAllData()
+        e.target.reset()
+      } else {
+        const err = await res.json()
+        alert(`❌ ${err.detail || 'Failed to add festival'}`)
+      }
+    } catch { alert('❌ Network error.') }
   }
 
   if (!token) {
@@ -655,57 +726,156 @@ export default function App() {
           {/* COMPANIES TAB */}
           {activeTab === 'companies' && (
             <div className="max-w-6xl mx-auto animate-fade-in">
-              <div className="flex justify-between items-center mb-8">
-                <div><h2 className="text-3xl font-bold text-slate-900">Companies</h2></div>
-                <button onClick={() => setIsModalOpen(true)} className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-orange-600 transition-colors shadow-sm"><i className="fa-solid fa-plus"></i> Add Company</button>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-3xl font-bold text-slate-900">Companies</h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    {selectedCompanies.size > 0
+                      ? `${selectedCompanies.size} selected`
+                      : `${companies.length} total companies`}
+                  </p>
+                </div>
+                <button onClick={() => setIsModalOpen(true)} className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-orange-600 transition-colors shadow-sm">
+                  <i className="fa-solid fa-plus"></i> Add Company
+                </button>
               </div>
+
+              {/* BULK ACTION BAR */}
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-4 mb-6">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-slate-600 mr-2">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-orange-500"
+                      checked={selectedCompanies.size === companies.length && companies.length > 0}
+                      onChange={toggleAllCompanies}
+                    />
+                    Select All
+                  </label>
+                  <div className="w-px h-6 bg-gray-200"></div>
+                  <select
+                    value={bulkFestival}
+                    onChange={e => setBulkFestival(e.target.value)}
+                    className="bg-slate-50 border border-gray-200 text-slate-800 rounded-lg px-3 py-2 text-sm font-medium outline-none flex-1 max-w-xs"
+                  >
+                    <option value="">— Choose Festival for Bulk Action —</option>
+                    {festivals.map(f => (
+                      <option key={f.festival_id} value={f.name}>{f.name} ({f.date})</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleBulkDispatch(false)}
+                    disabled={isBulkDispatching || selectedCompanies.size === 0 || !bulkFestival}
+                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-sm"
+                  >
+                    <i className="fa-solid fa-film"></i>
+                    {isBulkDispatching ? 'Generating...' : `Generate Videos (${selectedCompanies.size})`}
+                  </button>
+                  <button
+                    onClick={() => handleBulkDispatch(true)}
+                    disabled={isBulkDispatching || selectedCompanies.size === 0 || !bulkFestival}
+                    className="bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-sm"
+                  >
+                    <i className="fa-brands fa-whatsapp"></i>
+                    {isBulkDispatching ? 'Sending...' : `Generate & Send (${selectedCompanies.size})`}
+                  </button>
+                </div>
+              </div>
+
+              {/* BULK RESULTS */}
+              {bulkResults && (
+                <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5 mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-slate-800">Bulk Operation Results — {bulkResults.festival}</h3>
+                    <button onClick={() => setBulkResults(null)} className="text-slate-400 hover:text-slate-600">
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+                  <div className="flex gap-4 mb-4">
+                    <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-bold">✅ Sent: {bulkResults.sent}</span>
+                    <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold">🎬 Generated: {bulkResults.generated}</span>
+                    <span className="bg-red-50 text-red-700 px-3 py-1 rounded-full text-xs font-bold">❌ Errors: {bulkResults.errors}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {bulkResults.results?.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm p-3 bg-slate-50 rounded-lg">
+                        <span className="font-medium text-slate-700">{r.company_name || r.customer_id}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          r.status === 'sent' ? 'bg-green-100 text-green-700' :
+                          r.status === 'generated' ? 'bg-indigo-100 text-indigo-700' :
+                          r.status === 'skipped' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>{r.status} {r.detail ? `— ${r.detail}` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {companies.length === 0 && (
                 <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
                   <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl"><i className="fa-solid fa-building"></i></div>
                   <h3 className="font-bold text-xl text-slate-800 mb-1">No Companies Onboarded</h3>
-                  <p className="text-slate-500 text-sm mb-6">Get started by adding your first client company to the platform.</p>
+                  <p className="text-slate-500 text-sm mb-6">Get started by adding your first client company.</p>
                   <button onClick={() => setIsModalOpen(true)} className="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold text-sm shadow hover:bg-orange-600 transition-colors">Add First Company</button>
                 </div>
               )}
 
               <div className="grid grid-cols-3 gap-6">
                 {companies.map((c) => {
+                  const isSelected = selectedCompanies.has(c.customer_id)
                   const currentFest = companyTabSelectedFestival[c.customer_id] || festivals[0]?.name || ''
                   return (
-                    <div key={c.customer_id} className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                    <div
+                      key={c.customer_id}
+                      className={`bg-white rounded-xl border-2 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer ${
+                        isSelected ? 'border-orange-500 ring-2 ring-orange-200' : 'border-gray-100'
+                      }`}
+                      onClick={() => toggleCompany(c.customer_id)}
+                    >
                       <div>
                         <div className="flex justify-between items-start mb-4">
-                          <div className="w-12 h-12 rounded-lg bg-blue-600 text-white flex justify-center items-center font-bold text-xl">{c.company_name?.charAt(0) || 'C'}</div>
-                          <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-bold">Active</span>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 accent-orange-500 shrink-0"
+                              checked={isSelected}
+                              onChange={() => toggleCompany(c.customer_id)}
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex justify-center items-center font-bold text-xl shadow">
+                              {c.company_name?.charAt(0) || 'C'}
+                            </div>
+                          </div>
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            c.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
+                          }`}>{c.is_active ? 'Active' : 'Expired'}</span>
                         </div>
                         <h3 className="font-bold text-lg text-slate-800">{c.company_name}</h3>
                         <p className="text-xs text-slate-500 mb-4">{c.owner_name}</p>
-                        <div className="text-xs text-slate-600 space-y-2 mb-6">
-                          <div className="flex items-center gap-2"><i className="fa-solid fa-phone text-slate-400 w-3"></i> {c.whatsapp}</div>
+                        <div className="text-xs text-slate-600 space-y-1.5 mb-5">
+                          <div className="flex items-center gap-2"><i className="fa-brands fa-whatsapp text-green-500 w-3"></i> {c.whatsapp}</div>
                           <div className="flex items-center gap-2"><i className="fa-solid fa-location-dot text-slate-400 w-3"></i> {c.address}</div>
                         </div>
                       </div>
-                      
-                      <div className="border-t border-gray-50 pt-4 flex flex-col gap-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-slate-400">Select Festival:</span>
-                          <select 
+                      <div className="border-t border-gray-50 pt-4 flex flex-col gap-3" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-2">
+                          <select
                             value={currentFest}
-                            onChange={(e) => setCompanyTabSelectedFestival({...companyTabSelectedFestival, [c.customer_id]: e.target.value})}
-                            className="bg-slate-50 border border-gray-200 text-slate-800 rounded p-1 text-xs font-medium flex-1"
+                            onChange={e => setCompanyTabSelectedFestival({...companyTabSelectedFestival, [c.customer_id]: e.target.value})}
+                            className="bg-slate-50 border border-gray-200 text-slate-800 rounded p-1.5 text-xs font-medium flex-1 outline-none"
                           >
                             {festivals.map(f => <option key={f.festival_id} value={f.name}>{f.name}</option>)}
                           </select>
                         </div>
-                        <div className="flex justify-between items-center pt-1">
+                        <div className="flex justify-between items-center">
                           <span className="text-[10px] text-slate-400">Ends: {c.subscription_end}</span>
-                          <button 
+                          <button
                             onClick={() => handleSendDirectWhatsApp(c.customer_id, currentFest)}
                             disabled={isDispatching || !currentFest}
                             className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition-colors"
                           >
-                            <i className="fa-brands fa-whatsapp"></i> {isDispatching ? "Sending..." : "Send Video"}
+                            <i className="fa-brands fa-whatsapp"></i> {isDispatching ? 'Sending...' : 'Send Video'}
                           </button>
                         </div>
                       </div>
@@ -715,6 +885,7 @@ export default function App() {
               </div>
             </div>
           )}
+
 
           {/* WHATSAPP TAB */}
           {activeTab === 'whatsapp' && (
@@ -912,6 +1083,12 @@ export default function App() {
                       </select>
                     </div>
                     <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setIsAddFestivalOpen(true)}
+                        className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition-colors"
+                      >
+                        <i className="fa-solid fa-plus"></i> Add Festival
+                      </button>
                       <button 
                         onClick={() => setCalendarDate(new Date(year, month - 1, 1))}
                         className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 shadow-sm border border-gray-200 font-bold"
@@ -1105,6 +1282,49 @@ export default function App() {
               <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
                 <button type="button" onClick={() => setIsAddUserModalOpen(false)} className="px-5 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg font-bold">Cancel</button>
                 <button type="submit" disabled={isAddingUser} className="px-5 py-2 text-sm bg-orange-500 text-white rounded-lg font-bold shadow hover:bg-orange-600 transition-colors">{isAddingUser ? "Creating..." : "Create User"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ADD FESTIVAL MODAL */}
+      {isAddFestivalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-xl text-slate-900">Add Custom Festival</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Add to your festival calendar & video dispatch list</p>
+              </div>
+              <button onClick={() => setIsAddFestivalOpen(false)} className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-400"><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onSubmit={handleAddFestival} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Festival / Event Name</label>
+                <input name="fest_name" type="text" placeholder="e.g. Diwali, Onam, Bhai Dooj" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-orange-400/50" required />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Date</label>
+                <input name="fest_date" type="date" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-orange-400/50" required />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Type</label>
+                <select name="fest_type" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-orange-400/50">
+                  <option value="Hindu">Hindu</option>
+                  <option value="Islamic">Islamic</option>
+                  <option value="Christian">Christian</option>
+                  <option value="Sikh">Sikh</option>
+                  <option value="Buddhist">Buddhist</option>
+                  <option value="Jain">Jain</option>
+                  <option value="National">National</option>
+                  <option value="Regional">Regional</option>
+                  <option value="Cultural">Cultural</option>
+                  <option value="Custom">Custom</option>
+                </select>
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
+                <button type="button" onClick={() => setIsAddFestivalOpen(false)} className="px-5 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg font-bold">Cancel</button>
+                <button type="submit" className="px-5 py-2 text-sm bg-orange-500 text-white rounded-lg font-bold shadow hover:bg-orange-600 transition-colors">Add Festival</button>
               </div>
             </form>
           </div>

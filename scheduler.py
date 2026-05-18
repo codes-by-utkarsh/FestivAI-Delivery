@@ -59,9 +59,8 @@ def send_whatsapp_video(whatsapp_number: str, media_id: str, template_name: str 
         "Content-Type": "application/json"
     }
     
-    # Meta requires a pre-approved template for business-initiated messages.
-    # The payload dynamically attaches the uploaded video's media_id to the template header.
-    payload = {
+    # 1. First attempt: Send as a template message
+    template_payload = {
         "messaging_product": "whatsapp",
         "to": whatsapp_number,
         "type": "template",
@@ -77,17 +76,38 @@ def send_whatsapp_video(whatsapp_number: str, media_id: str, template_name: str 
         }
     }
     
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(WHATSAPP_API_URL, headers=headers, json=payload, timeout=10)
-            if response.status_code in [200, 201]:
+    # 2. Fallback attempt: Send as a direct video message (works for active customer service windows & test numbers)
+    direct_payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": whatsapp_number,
+        "type": "video",
+        "video": {
+            "id": media_id,
+            "caption": "Here is your festival greeting video! 🎉"
+        }
+    }
+    
+    try:
+        # Try template first
+        logger.info(f"Attempting to send WhatsApp template '{template_name}' to {whatsapp_number}...")
+        response = requests.post(WHATSAPP_API_URL, headers=headers, json=template_payload, timeout=15)
+        if response.status_code in [200, 201]:
+            logger.info("Successfully sent WhatsApp template message.")
+            return True
+        else:
+            logger.warning(f"Template message failed ({response.text}). Falling back to direct video message...")
+            # Fallback to direct video message
+            res_direct = requests.post(WHATSAPP_API_URL, headers=headers, json=direct_payload, timeout=15)
+            if res_direct.status_code in [200, 201]:
+                logger.info("Successfully sent direct WhatsApp video message.")
                 return True
             else:
-                logger.error(f"WhatsApp API error: {response.text}")
-        except Exception as e:
-            logger.error(f"Request failed: {e}")
-    return False
+                logger.error(f"Direct video message also failed: {res_direct.text}")
+                return False
+    except Exception as e:
+        logger.error(f"WhatsApp dispatch exception: {e}")
+        return False
 
 def daily_job():
     logger.info("Starting daily background job")
