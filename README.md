@@ -93,3 +93,48 @@ festival_video_platform/
     ├── src/index.css      # Tailwind & Custom CSS
     └── tailwind.config.js # Tailwind v3 Configuration
 ```
+
+---
+
+## 🌍 Cloud Deployment (Vercel & Render)
+
+The project is fully pre-configured for seamless cloud deployment with **Vercel** (Frontend) and **Render** (Backend).
+
+### 1. Deploying Backend on Render
+
+We have provided a `render.yaml` Infrastructure-as-Code blueprint at the root of the project.
+
+#### **Option A: 1-Click Automated Deployment**
+1. Push your repository to GitHub.
+2. Log into [Render](https://render.com) -> Go to **Blueprints** -> Click **New Blueprint Instance**.
+3. Connect your GitHub repository. Render will automatically detect the `render.yaml` file and set up your FastAPI web service.
+4. In the Render Dashboard, go to your new Web Service -> **Environment** -> Add your secret Environment Variables (`JWT_SECRET`, `SPREADSHEET_ID`, `WHATSAPP_TOKEN`, `WHATSAPP_API_URL`).
+5. Upload your `credentials.json` either via Render Secret Files or paste its contents into an environment variable if adapted in `database.py`.
+
+#### **Option B: Manual Web Service Setup**
+1. In Render, click **New** -> **Web Service**.
+2. Connect your GitHub repository.
+3. Configure the following settings:
+   * **Runtime**: `Python 3`
+   * **Build Command**: `pip install -r requirements.txt`
+   * **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. Add your Environment Variables under the **Environment** tab.
+
+*Once deployed, copy your Render backend URL (e.g., `https://festivai-delivery-backend.onrender.com`).*
+
+---
+
+### 2. Deploying Frontend on Vercel
+
+We have provided `vercel.json` configuration files both at the root and inside `frontend_app` to ensure flawless automated builds and Single Page Application (SPA) routing.
+
+1. Push your repository to GitHub.
+2. Log into [Vercel](https://vercel.com) -> Click **Add New** -> **Project**.
+3. Import your GitHub repository.
+4. **Project Configuration**:
+   * **Framework Preset**: `Vite`
+   * **Root Directory**: Click `Edit` and select `frontend_app` (Recommended). If you leave it as the repository root, our root `vercel.json` will automatically handle the build and output directory.
+   * **Environment Variables**: Add a new variable:
+     * **Name**: `VITE_API_URL`
+     * **Value**: Your live Render backend URL (e.g., `https://festivai-delivery-backend.onrender.com`)
+5. Click **Deploy**. Vercel will build the React app and assign you a live production URL!

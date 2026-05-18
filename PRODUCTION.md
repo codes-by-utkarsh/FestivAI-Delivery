@@ -122,10 +122,26 @@ Attach this handler to a button inside your company card or festival list:
 
 ---
 
-## 🚀 4. Deployment Checklist
+## 🚀 4. Deployment Checklist & Cloud Hosting Guide
 
-1. [ ] **GitHub Repository**: Ensure `.gitignore` is active. Commit all code.
-2. [ ] **Database**: Verify Google Sheet sharing permissions with the service account.
-3. [ ] **Backend Hosting** (Render/Railway/AWS): Deploy FastAPI app. Set environment variables. Ensure `ImageMagick` is installed on the container/server.
-4. [ ] **Frontend Hosting** (Vercel/Netlify): Run `npm run build` in `frontend_app`. Configure environment variable `VITE_API_URL` to point to your live backend domain.
-5. [ ] **Meta Dashboard**: Submit your `festival_video` template for review and ensure your permanent token is active.
+We have pre-configured the repository for automated deployment on **Vercel** (Frontend) and **Render** (Backend).
+
+### A. Backend Deployment (Render)
+1. [ ] **Blueprint Setup**: Log into Render, go to **Blueprints**, and connect your GitHub repository. Render will automatically read `render.yaml` and configure the FastAPI web service.
+2. [ ] **Environment Variables**: In the Render dashboard, go to your Web Service -> **Environment** and add:
+   * `JWT_SECRET`
+   * `SPREADSHEET_ID`
+   * `WHATSAPP_TOKEN`
+   * `WHATSAPP_API_URL`
+3. [ ] **Service Account Key**: Upload `credentials.json` via Render Secret Files (mounting it to the root) or store its contents in an environment variable if adapted in `database.py`.
+4. [ ] **FFmpeg & Binaries**: Our `requirements.txt` includes `imageio-ffmpeg` to ensure standalone FFmpeg binaries are automatically provided in Render's Python 3 environment without requiring system-level apt packages. Note: `video_engine.py` uses pure PIL (`ImageDraw`, `ImageFont`) for text rendering, avoiding ImageMagick dependencies entirely!
+
+### B. Frontend Deployment (Vercel)
+1. [ ] **Project Setup**: Log into Vercel, click **Add New Project**, and import your GitHub repository.
+2. [ ] **Root Directory**: Configure the Root Directory to `frontend_app` in the Vercel project import settings (recommended). If left at the repository root, our root `vercel.json` will automatically direct Vercel to build `frontend_app` and serve `frontend_app/dist`.
+3. [ ] **Environment Variable**: Add `VITE_API_URL` in Vercel's Environment Variables setting, pointing to your live Render backend URL (e.g., `https://festivai-delivery-backend.onrender.com`).
+4. [ ] **SPA Routing**: Vercel will automatically apply `vercel.json` to rewrite all client-side navigation to `/index.html`, preventing 404 errors on direct page loads.
+
+### C. Meta & Database Finalization
+1. [ ] **Database**: Verify Google Sheet sharing permissions with your Google Cloud Service Account email address.
+2. [ ] **Meta Dashboard**: Submit your WhatsApp video template (e.g., `hello_world` or `festival_video`) for review and ensure your permanent token is active.
