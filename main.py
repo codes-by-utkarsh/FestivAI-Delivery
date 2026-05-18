@@ -228,9 +228,18 @@ def get_customers(current_user: dict = Depends(require_role(["Admin", "Agent"]))
 
     # Filter out empty/blank rows from Google Sheets
     customers = [c for c in raw_customers if c.get("customer_id")]
+    logger.info(f"[get_customers] Called by user_id: '{current_user.get('user_id')}', role: '{current_user.get('role')}'. Total raw customers: {len(raw_customers)}")
 
     if current_user.get("role") == "Agent":
-        customers = [c for c in customers if str(c.get("agent_id")) == str(current_user.get("user_id"))]
+        agent_id = str(current_user.get("user_id"))
+        filtered_customers = []
+        for c in customers:
+            c_agent = str(c.get("agent_id"))
+            logger.info(f"[get_customers] Comparing customer '{c.get('company_name')}' agent_id '{c_agent}' == current user '{agent_id}'")
+            if c_agent == agent_id:
+                filtered_customers.append(c)
+        customers = filtered_customers
+        logger.info(f"[get_customers] Agent filtered customers count: {len(customers)}")
 
     # Compute active status dynamically based on subscription_end
     today = datetime.utcnow().strftime("%Y-%m-%d")
@@ -300,6 +309,7 @@ def create_customer(
         0,
         "Active"
     ]
+    logger.info(f"[create_customer] Appending customer '{company_name}' with agent_id: '{current_user.get('user_id')}'")
     customers_ws.append_row(row)
 
     logger.info(f"Onboarded new customer: {company_name} (ID: {customer_id})")
