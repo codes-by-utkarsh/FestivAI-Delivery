@@ -50,6 +50,14 @@ export default function App() {
   // Festival Management
   const [isAddFestivalOpen, setIsAddFestivalOpen] = useState(false)
 
+  // Toast Notifications
+  const [toasts, setToasts] = useState([])
+  const showToast = (message, type = 'info') => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, message, type }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500)
+  }
+
   useEffect(() => {
     if (token) {
       fetchAllData()
@@ -224,15 +232,15 @@ export default function App() {
         localStorage.setItem('userName', data.name || '')
         localStorage.setItem('userEmail', data.email || '')
         localStorage.setItem('userRole', data.role || '')
+        localStorage.setItem('userId', data.user_id || '')
         setToken(data.access_token)
         setCurrentUser({ name: data.name || 'Active User', email: data.email || '', role: data.role || 'Agent', user_id: data.user_id || '' })
-        alert(`✅ Successfully registered as ${role}! Welcome to SimplyPromised.`)
       } else {
         const err = await res.json()
-        alert(`❌ Registration failed: ${err.detail || 'Server error'}`)
+        showToast(`Registration failed: ${err.detail || 'Server error'}`, 'error')
       }
     } catch (e) {
-      alert("❌ Network error connecting to backend API.")
+      showToast('Network error connecting to backend API.', 'error')
     }
     setIsLoggingIn(false)
   }
@@ -256,16 +264,16 @@ export default function App() {
         body: JSON.stringify({ name, email, password, role })
       })
       if (res.ok) {
-        alert(`✅ ${role} '${name}' created successfully!`)
+        showToast(`${role} '${name}' created successfully!`, 'success')
         setIsAddUserModalOpen(false)
         fetchAllData()
         e.target.reset()
       } else {
         const err = await res.json()
-        alert(`❌ Failed: ${err.detail || 'Server error'}`)
+        showToast(`Failed: ${err.detail || 'Server error'}`, 'error')
       }
     } catch {
-      alert('❌ Network error connecting to backend.')
+      showToast('Network error connecting to backend.', 'error')
     }
     setIsAddingUser(false)
   }
@@ -278,7 +286,7 @@ export default function App() {
     const photos = e.target.photos.files
     
     if (photos.length < 8 || photos.length > 10) {
-      alert("Please select between 8 and 10 photos for the video engine.")
+      showToast('Please select between 8 and 10 photos for the video engine.', 'warning')
       setIsSubmitting(false)
       return
     }
@@ -291,59 +299,41 @@ export default function App() {
       })
 
       if (res.ok) {
-        alert("✅ Company onboarded successfully!")
+        showToast('Company onboarded successfully! 🎉', 'success')
         setIsModalOpen(false)
         fetchAllData()
       } else {
         const err = await res.json()
-        alert(`❌ Onboarding failed: ${err.detail || 'Server error'}`)
+        showToast(`Onboarding failed: ${err.detail || 'Server error'}`, 'error')
         setIsModalOpen(false)
       }
     } catch (error) {
-      alert("❌ Network error connecting to backend API.")
+      showToast('Network error connecting to backend API.', 'error')
       setIsModalOpen(false)
     }
     setIsSubmitting(false)
   }
 
   const handleSendDirectWhatsApp = async (customerId, festivalName) => {
-    if (!customerId) {
-      alert("Please select a valid company first.");
-      return;
-    }
-    if (!festivalName) {
-      alert("Please select a valid festival first.");
-      return;
-    }
-    
+    if (!customerId) { showToast('Please select a valid company first.', 'warning'); return }
+    if (!festivalName) { showToast('Please select a valid festival first.', 'warning'); return }
     setIsDispatching(true)
-    alert(`Generating video for ${festivalName} and dispatching to WhatsApp... This may take 30-60 seconds.`)
-    
+    showToast(`Generating video for ${festivalName}... This may take 30–60 seconds. ⏳`, 'info')
     try {
       const res = await fetch(`${API_BASE}/send-whatsapp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          customer_id: customerId,
-          festival_name: festivalName,
-          template_name: "hello_world"
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ customer_id: customerId, festival_name: festivalName, template_name: 'hello_world' })
       })
-
       if (res.ok) {
         const data = await res.json()
-        alert(`✅ Video successfully generated and delivered! Meta Media ID: ${data.media_id}`)
+        showToast(`✅ Video delivered via WhatsApp! Media ID: ${data.media_id}`, 'success')
         fetchAllData()
       } else {
         const err = await res.json()
-        alert(`❌ Failed to send WhatsApp: ${err.detail || 'API Error'}`)
+        showToast(`Failed: ${err.detail || 'API Error'}`, 'error')
       }
-    } catch (error) {
-      alert('❌ Network error while connecting to the video engine server.')
-    }
+    } catch { showToast('Network error connecting to video engine.', 'error') }
     setIsDispatching(false)
   }
 
@@ -364,25 +354,24 @@ export default function App() {
   }
 
   const handleBulkDispatch = async (sendWhatsapp) => {
-    if (selectedCompanies.size === 0) { alert('Select at least one company.'); return }
-    if (!bulkFestival) { alert('Select a festival first.'); return }
+    if (selectedCompanies.size === 0) { showToast('Select at least one company.', 'warning'); return }
+    if (!bulkFestival) { showToast('Select a festival first.', 'warning'); return }
     setIsBulkDispatching(true)
     setBulkResults(null)
+    showToast(`Processing ${selectedCompanies.size} companies for ${bulkFestival}... ⏳`, 'info')
     try {
       const res = await fetch(`${API_BASE}/bulk-generate-videos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          customer_ids: [...selectedCompanies],
-          festival_name: bulkFestival,
-          send_whatsapp: sendWhatsapp,
-          template_name: 'hello_world'
-        })
+        body: JSON.stringify({ customer_ids: [...selectedCompanies], festival_name: bulkFestival, send_whatsapp: sendWhatsapp, template_name: 'hello_world' })
       })
       const data = await res.json()
-      if (res.ok) { setBulkResults(data); fetchAllData() }
-      else alert(`❌ Bulk operation failed: ${data.detail || 'Server error'}`)
-    } catch { alert('❌ Network error.') }
+      if (res.ok) {
+        setBulkResults(data)
+        fetchAllData()
+        showToast(`Bulk done! ✅ Sent: ${data.sent}  🎬 Generated: ${data.generated}  ❌ Errors: ${data.errors}`, 'success')
+      } else showToast(`Bulk failed: ${data.detail || 'Server error'}`, 'error')
+    } catch { showToast('Network error.', 'error') }
     setIsBulkDispatching(false)
   }
 
@@ -398,15 +387,15 @@ export default function App() {
         body: JSON.stringify({ name, date, type })
       })
       if (res.ok) {
-        alert(`✅ Festival "${name}" added!`)
+        showToast(`Festival "${name}" added successfully! 🎉`, 'success')
         setIsAddFestivalOpen(false)
         fetchAllData()
         e.target.reset()
       } else {
         const err = await res.json()
-        alert(`❌ ${err.detail || 'Failed to add festival'}`)
+        showToast(err.detail || 'Failed to add festival', 'error')
       }
-    } catch { alert('❌ Network error.') }
+    } catch { showToast('Network error.', 'error') }
   }
 
   if (!token) {
@@ -657,67 +646,45 @@ export default function App() {
 
               {/* UPCOMING FESTIVALS */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                <div className="flex justify-between items-center mb-6 border-b border-gray-50 pb-4">
+                <div className="flex justify-between items-center mb-5 border-b border-gray-50 pb-4">
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800">Upcoming Festivals & Public Holidays</h3>
-                    <p className="text-xs text-slate-500">Combining Google Sheets DB events with live Nager.Date Public API holidays</p>
+                    <h3 className="text-lg font-bold text-slate-800">Upcoming Festivals &amp; Holidays</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Go to <strong>Companies</strong> tab to dispatch greeting videos</p>
                   </div>
-                  <div className="flex items-center gap-2 bg-slate-50 border border-gray-200 px-3 py-1.5 rounded-xl shadow-sm">
-                    <span className="text-xs font-bold text-slate-600"><i className="fa-solid fa-earth-americas text-orange-500"></i> API Country:</span>
-                    <select 
-                      value={holidayCountry} 
-                      onChange={(e) => setHolidayCountry(e.target.value)}
-                      className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer"
-                    >
-                      <option value="IN">🇮🇳 India (IN)</option>
-                      <option value="US">🇺🇸 United States (US)</option>
-                      <option value="GB">🇬🇧 United Kingdom (GB)</option>
-                      <option value="CA">🇨🇦 Canada (CA)</option>
-                      <option value="AU">🇦🇺 Australia (AU)</option>
-                      <option value="DE">🇩🇪 Germany (DE)</option>
-                      <option value="FR">🇫🇷 France (FR)</option>
-                      <option value="IT">🇮🇹 Italy (IT)</option>
-                      <option value="ES">🇪🇸 Spain (ES)</option>
-                      <option value="JP">🇯🇵 Japan (JP)</option>
-                      <option value="BR">🇧🇷 Brazil (BR)</option>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-gray-200 px-3 py-1.5 rounded-xl">
+                    <span className="text-xs font-bold text-slate-600"><i className="fa-solid fa-earth-americas text-orange-500 mr-1"></i></span>
+                    <select value={holidayCountry} onChange={(e) => setHolidayCountry(e.target.value)} className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer">
+                      <option value="IN">🇮🇳 India</option>
+                      <option value="US">🇺🇸 USA</option>
+                      <option value="GB">🇬🇧 UK</option>
+                      <option value="CA">🇨🇦 Canada</option>
+                      <option value="AU">🇦🇺 Australia</option>
+                      <option value="DE">🇩🇪 Germany</option>
+                      <option value="JP">🇯🇵 Japan</option>
                     </select>
                   </div>
                 </div>
-                
-                <div className="space-y-4">
-                  {festivals.length === 0 && <p className="text-slate-400 text-sm py-4 text-center">No festivals found in database.</p>}
-                  {festivals.map((f) => (
-                    <div key={f.festival_id} className="flex items-center justify-between p-4 bg-[#fcfcfc] rounded-xl border border-gray-50 hover:bg-white hover:shadow-sm transition-all">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-sm ${f.isPublic ? 'bg-blue-600' : 'bg-[#f05c42]'}`}>
-                          <i className={`fa-solid ${f.isPublic ? 'fa-earth-americas' : 'fa-calendar'}`}></i>
+                <div className="grid grid-cols-2 gap-3">
+                  {festivals.length === 0 && <p className="text-slate-400 text-sm py-4 col-span-2 text-center">No upcoming festivals found.</p>}
+                  {festivals.filter(f => f.date >= new Date().toISOString().slice(0,10)).slice(0,8).map((f) => {
+                    const daysLeft = Math.ceil((new Date(f.date) - new Date()) / 86400000)
+                    const isNear = daysLeft <= 7
+                    const isToday = daysLeft === 0
+                    return (
+                      <div key={f.festival_id || f.name} className={`flex items-center gap-3 p-4 rounded-xl border ${isToday ? 'bg-green-50 border-green-200' : isNear ? 'bg-orange-50 border-orange-100' : 'bg-slate-50 border-gray-100'}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 shadow-sm ${isToday ? 'bg-green-500' : isNear ? 'bg-orange-500' : f.isPublic ? 'bg-blue-500' : 'bg-slate-300'}`}>
+                          <span>{isToday ? '🎉' : f.isPublic ? '🌐' : '🪔'}</span>
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-800 text-sm">{f.name}</p>
-                          <p className="text-xs text-slate-500">{f.date} • {f.type}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-800 text-sm truncate">{f.name}</p>
+                          <p className="text-xs text-slate-400">{f.date}</p>
                         </div>
+                        <span className={`text-[11px] font-bold px-2 py-1 rounded-full shrink-0 ${isToday ? 'bg-green-200 text-green-800' : isNear ? 'bg-orange-200 text-orange-800' : 'bg-slate-200 text-slate-500'}`}>
+                          {isToday ? 'Today!' : `${daysLeft}d`}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <select 
-                          value={dashboardSelectedCompany} 
-                          onChange={(e) => setDashboardSelectedCompany(e.target.value)}
-                          className="bg-white border border-gray-200 text-slate-800 rounded-lg p-1.5 text-xs font-medium outline-none"
-                        >
-                          {companies.length === 0 && <option value="">No companies</option>}
-                          {companies.map(c => (
-                            <option key={c.customer_id} value={c.customer_id}>{c.company_name}</option>
-                          ))}
-                        </select>
-                        <button 
-                          onClick={() => handleSendDirectWhatsApp(dashboardSelectedCompany, f.name)}
-                          disabled={isDispatching || companies.length === 0}
-                          className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition-colors"
-                        >
-                          <i className="fa-brands fa-whatsapp text-sm"></i> {isDispatching ? "Sending..." : "Dispatch Now"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             </div>
