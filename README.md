@@ -102,25 +102,22 @@ The project is fully pre-configured for seamless cloud deployment with **Vercel*
 
 ### 1. Deploying Backend on Render
 
-We have provided a `render.yaml` Infrastructure-as-Code blueprint at the root of the project.
-
-#### **Option A: 1-Click Automated Deployment**
 1. Push your repository to GitHub.
-2. Log into [Render](https://render.com) -> Go to **Blueprints** -> Click **New Blueprint Instance**.
-3. Connect your GitHub repository. Render will automatically detect the `render.yaml` file and set up your FastAPI web service.
-4. In the Render Dashboard, go to your new Web Service -> **Environment** -> Add your secret Environment Variables (`JWT_SECRET`, `SPREADSHEET_ID`, `WHATSAPP_TOKEN`, `WHATSAPP_API_URL`).
-5. Upload your `credentials.json` either via Render Secret Files or paste its contents into an environment variable if adapted in `database.py`.
-
-#### **Option B: Manual Web Service Setup**
-1. In Render, click **New** -> **Web Service**.
-2. Connect your GitHub repository.
-3. Configure the following settings:
+2. Log into [Render](https://render.com) -> Click **New** -> **Web Service**.
+3. Connect your GitHub repository.
+4. Configure the following settings:
    * **Runtime**: `Python 3`
    * **Build Command**: `pip install -r requirements.txt`
    * **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add your Environment Variables under the **Environment** tab.
+5. **Environment Variables**: Under the **Environment** tab, add:
+   * `JWT_SECRET`
+   * `SPREADSHEET_ID`
+   * `WHATSAPP_TOKEN`
+   * `WHATSAPP_API_URL`
+6. **Service Account Key**: Upload your `credentials.json` via Render's **Secret Files** tab (mount path: `credentials.json` at the root) or paste its contents into an environment variable if adapted in `database.py`.
 
 *Once deployed, copy your Render backend URL (e.g., `https://festivai-delivery-backend.onrender.com`).*
+
 
 ---
 

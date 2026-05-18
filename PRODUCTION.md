@@ -127,7 +127,7 @@ Attach this handler to a button inside your company card or festival list:
 We have pre-configured the repository for automated deployment on **Vercel** (Frontend) and **Render** (Backend).
 
 ### A. Backend Deployment (Render)
-1. [ ] **Blueprint Setup**: Log into Render, go to **Blueprints**, and connect your GitHub repository. Render will automatically read `render.yaml` and configure the FastAPI web service.
+1. [ ] **Web Service Setup**: Log into Render, click **New** -> **Web Service**, and connect your GitHub repository. Configure Runtime to `Python 3`, Build Command to `pip install -r requirements.txt`, and Start Command to `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 2. [ ] **Environment Variables**: In the Render dashboard, go to your Web Service -> **Environment** and add:
    * `JWT_SECRET`
    * `SPREADSHEET_ID`
@@ -135,6 +135,7 @@ We have pre-configured the repository for automated deployment on **Vercel** (Fr
    * `WHATSAPP_API_URL`
 3. [ ] **Service Account Key**: Upload `credentials.json` via Render Secret Files (mounting it to the root) or store its contents in an environment variable if adapted in `database.py`.
 4. [ ] **FFmpeg & Binaries**: Our `requirements.txt` includes `imageio-ffmpeg` to ensure standalone FFmpeg binaries are automatically provided in Render's Python 3 environment without requiring system-level apt packages. Note: `video_engine.py` uses pure PIL (`ImageDraw`, `ImageFont`) for text rendering, avoiding ImageMagick dependencies entirely!
+
 
 ### B. Frontend Deployment (Vercel)
 1. [ ] **Project Setup**: Log into Vercel, click **Add New Project**, and import your GitHub repository.
