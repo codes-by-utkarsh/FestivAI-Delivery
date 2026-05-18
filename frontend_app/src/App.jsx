@@ -4,21 +4,37 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token'))
+  const [currentUser, setCurrentUser] = useState({
+    name: localStorage.getItem('userName') || 'Active User',
+    email: localStorage.getItem('userEmail') || '',
+    role: localStorage.getItem('userRole') || 'Admin',
+    user_id: localStorage.getItem('userId') || ''
+  })
   const [authMode, setAuthMode] = useState('login')
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [currentHeaderDate, setCurrentHeaderDate] = useState(
+    new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  )
+  const [calendarDate, setCalendarDate] = useState(new Date())
   
   // Live Data States
   const [companies, setCompanies] = useState([])
-  const [festivals, setFestivals] = useState([])
+  const [dbFestivals, setDbFestivals] = useState([])
+  const [publicFestivals, setPublicFestivals] = useState([])
+  const [holidayCountry, setHolidayCountry] = useState('IN')
   const [usersList, setUsersList] = useState([])
   const [logs, setLogs] = useState([])
   const [stats, setStats] = useState({ total_companies: 0, active_agents: 0, videos_generated: 0, whatsapp_sent: 0 })
   
+  const festivals = [...dbFestivals, ...publicFestivals]
+  
   // UI Interaction States
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDispatching, setIsDispatching] = useState(false)
+  const [isAddingUser, setIsAddingUser] = useState(false)
   
   // Dispatch Selections
   const [dashboardSelectedCompany, setDashboardSelectedCompany] = useState('')
@@ -30,6 +46,63 @@ export default function App() {
       fetchAllData()
     }
   }, [token])
+
+  useEffect(() => {
+    const fetchPublicHolidays = async () => {
+      try {
+        if (holidayCountry === 'IN') {
+          const res = await fetch('https://jayantur13.github.io/calendar-bharat/calendar/2026.json')
+          if (res.ok) {
+            const data = await res.json()
+            const formatted = []
+            
+            Object.values(data).forEach(monthObj => {
+              Object.entries(monthObj).forEach(([dateLabel, eventObj]) => {
+                const parts = dateLabel.split(',') 
+                if (parts.length >= 2) {
+                  const monthDay = parts[0].trim().split(' ') 
+                  const yearNum = parts[1].trim() 
+                  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+                  const monthIndex = monthNames.indexOf(monthDay[0]) + 1
+                  const dayNum = parseInt(monthDay[1], 10)
+                  
+                  if (monthIndex > 0 && !isNaN(dayNum)) {
+                    const dateStr = `${yearNum}-${String(monthIndex).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
+                    formatted.push({
+                      festival_id: `bharat-${dateStr}-${eventObj.event.replace(/\s+/g, '-')}`,
+                      date: dateStr,
+                      name: eventObj.event,
+                      type: `${eventObj.type || 'Festival'} (IN)`,
+                      isPublic: true
+                    })
+                  }
+                }
+              })
+            })
+            
+            setPublicFestivals(formatted)
+          }
+          return
+        }
+
+        const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/2026/${holidayCountry}`)
+        if (res.ok) {
+          const data = await res.json()
+          const formatted = data.map(h => ({
+            festival_id: `public-${h.date}-${h.name.replace(/\s+/g, '-')}`,
+            date: h.date,
+            name: h.localName || h.name,
+            type: `Public Holiday (${holidayCountry})`,
+            isPublic: true
+          }))
+          setPublicFestivals(formatted)
+        }
+      } catch (e) {
+        console.error("Error fetching public holidays:", e)
+      }
+    }
+    fetchPublicHolidays()
+  }, [holidayCountry])
 
   const fetchAllData = async () => {
     try {
@@ -45,6 +118,17 @@ export default function App() {
         }
       }
 
+      // Fetch Current User Profile
+      const resMe = await fetch(`${API_BASE}/me`, { headers })
+      if (resMe.ok) {
+        const dataMe = await resMe.json()
+        setCurrentUser(dataMe)
+        localStorage.setItem('userName', dataMe.name || '')
+        localStorage.setItem('userEmail', dataMe.email || '')
+        localStorage.setItem('userRole', dataMe.role || '')
+        localStorage.setItem('userId', dataMe.user_id || '')
+      }
+
       // Fetch Stats
       const resStats = await fetch(`${API_BASE}/stats`, { headers })
       if (resStats.ok) {
@@ -56,7 +140,7 @@ export default function App() {
       const resFest = await fetch(`${API_BASE}/festivals`, { headers })
       if (resFest.ok) {
         const dataFest = await resFest.json()
-        setFestivals(dataFest.festivals || [])
+        setDbFestivals(dataFest.festivals || [])
         if (dataFest.festivals?.length > 0 && !dashboardSelectedFestival) {
           setDashboardSelectedFestival(dataFest.festivals[0].name)
         }
@@ -96,7 +180,11 @@ export default function App() {
       if (res.ok) {
         const data = await res.json()
         localStorage.setItem('token', data.access_token)
+        localStorage.setItem('userName', data.name || '')
+        localStorage.setItem('userEmail', data.email || '')
+        localStorage.setItem('userRole', data.role || '')
         setToken(data.access_token)
+        setCurrentUser({ name: data.name || 'Active User', email: data.email || '', role: data.role || 'Admin', user_id: data.user_id || '' })
       } else {
         const err = await res.json()
         alert(`❌ Login failed: ${err.detail || 'Invalid credentials'}`)
@@ -124,7 +212,11 @@ export default function App() {
       if (res.ok) {
         const data = await res.json()
         localStorage.setItem('token', data.access_token)
+        localStorage.setItem('userName', data.name || '')
+        localStorage.setItem('userEmail', data.email || '')
+        localStorage.setItem('userRole', data.role || '')
         setToken(data.access_token)
+        setCurrentUser({ name: data.name || 'Active User', email: data.email || '', role: data.role || 'Agent', user_id: data.user_id || '' })
         alert(`✅ Successfully registered as ${role}! Welcome to SimplyPromised.`)
       } else {
         const err = await res.json()
@@ -139,6 +231,34 @@ export default function App() {
   const logout = () => {
     localStorage.clear()
     setToken(null)
+  }
+
+  const handleAddUser = async (e) => {
+    e.preventDefault()
+    setIsAddingUser(true)
+    const name = e.target.name.value
+    const email = e.target.email.value
+    const password = e.target.password.value
+    const role = e.target.role.value
+    try {
+      const res = await fetch(`${API_BASE}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ name, email, password, role })
+      })
+      if (res.ok) {
+        alert(`✅ ${role} '${name}' created successfully!`)
+        setIsAddUserModalOpen(false)
+        fetchAllData()
+        e.target.reset()
+      } else {
+        const err = await res.json()
+        alert(`❌ Failed: ${err.detail || 'Server error'}`)
+      }
+    } catch {
+      alert('❌ Network error connecting to backend.')
+    }
+    setIsAddingUser(false)
   }
 
   const handleCreateCompany = async (e) => {
@@ -246,11 +366,11 @@ export default function App() {
                       <div className="space-y-5 mb-8">
                         <div>
                           <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Email</label>
-                          <input name="email" type="email" defaultValue="admin@example.com" className="w-full bg-white/50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50" required />
+                          <input name="email" type="email" placeholder="Enter your registered email" className="w-full bg-white/50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50" required />
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Password</label>
-                          <input name="password" type="password" defaultValue="adminpassword123" className="w-full bg-white/50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50" required />
+                          <input name="password" type="password" placeholder="••••••••" className="w-full bg-white/50 border border-gray-200 text-gray-900 rounded-xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500/50" required />
                         </div>
                       </div>
                       <button type="submit" disabled={isLoggingIn} className="w-full bg-gradient-to-r from-orange-500 to-pink-500 text-white font-bold py-4 rounded-xl shadow-lg hover:-translate-y-0.5 transition-all mb-6">
@@ -340,8 +460,16 @@ export default function App() {
         
         <div className="p-4 border-t border-[#3b436e] bg-[#28325a] cursor-pointer" onClick={logout}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#3b436e] flex justify-center items-center font-bold text-white shadow-md">A</div>
-            <div><p className="text-sm font-bold text-white">Active Session</p><p className="text-xs text-[#a2a8c5]">Log out <i className="fa-solid fa-arrow-right-from-bracket ml-1"></i></p></div>
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-500 to-pink-500 flex justify-center items-center font-bold text-white shadow-md">
+              {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-sm font-bold text-white truncate">{currentUser.name || 'Active Session'}</p>
+              <p className="text-xs text-[#a2a8c5] flex items-center gap-1.5">
+                <span className="bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded text-[10px] font-bold">{currentUser.role || 'Admin'}</span>
+                <span>Log out <i className="fa-solid fa-arrow-right-from-bracket ml-0.5"></i></span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -351,7 +479,7 @@ export default function App() {
         <div className="h-16 bg-white border-b border-gray-100 flex items-center justify-end px-8 sticky top-0 z-30">
           <div className="flex items-center gap-2 text-gray-500 font-medium text-sm">
             <i className="fa-regular fa-calendar"></i>
-            <span>Saturday, 16 May 2026</span>
+            <span>{currentHeaderDate}</span>
           </div>
         </div>
         
@@ -425,7 +553,7 @@ export default function App() {
                     <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400"><i className="fa-solid fa-building"></i></div>
                   </div>
                   <h3 className="text-4xl font-bold text-slate-900 mb-1">{stats.total_companies}</h3>
-                  <p className="text-xs text-slate-400">Active subscriptions</p>
+                  <p className="text-xs text-emerald-500 font-semibold">{stats.active_companies ?? stats.total_companies} active</p>
                 </div>
                 
                 <div className="bg-[#f59e0b] p-6 rounded-2xl shadow-sm text-white flex flex-col">
@@ -449,7 +577,7 @@ export default function App() {
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
                   <div className="flex justify-between items-start mb-2">
                     <p className="text-sm text-slate-500 font-medium">WhatsApp Sent</p>
-                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400"><i className="fa-regular fa-comment"></i></div>
+                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400"><i className="fa-brands fa-whatsapp"></i></div>
                   </div>
                   <h3 className="text-4xl font-bold text-slate-900 mb-1">{stats.whatsapp_sent}</h3>
                   <p className="text-xs text-slate-400">Successfully delivered</p>
@@ -459,8 +587,30 @@ export default function App() {
               {/* UPCOMING FESTIVALS */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <div className="flex justify-between items-center mb-6 border-b border-gray-50 pb-4">
-                  <h3 className="text-lg font-bold text-slate-800">Upcoming Festivals</h3>
-                  <i className="fa-regular fa-calendar text-gray-400"></i>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Upcoming Festivals & Public Holidays</h3>
+                    <p className="text-xs text-slate-500">Combining Google Sheets DB events with live Nager.Date Public API holidays</p>
+                  </div>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-gray-200 px-3 py-1.5 rounded-xl shadow-sm">
+                    <span className="text-xs font-bold text-slate-600"><i className="fa-solid fa-earth-americas text-orange-500"></i> API Country:</span>
+                    <select 
+                      value={holidayCountry} 
+                      onChange={(e) => setHolidayCountry(e.target.value)}
+                      className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer"
+                    >
+                      <option value="IN">🇮🇳 India (IN)</option>
+                      <option value="US">🇺🇸 United States (US)</option>
+                      <option value="GB">🇬🇧 United Kingdom (GB)</option>
+                      <option value="CA">🇨🇦 Canada (CA)</option>
+                      <option value="AU">🇦🇺 Australia (AU)</option>
+                      <option value="DE">🇩🇪 Germany (DE)</option>
+                      <option value="FR">🇫🇷 France (FR)</option>
+                      <option value="IT">🇮🇹 Italy (IT)</option>
+                      <option value="ES">🇪🇸 Spain (ES)</option>
+                      <option value="JP">🇯🇵 Japan (JP)</option>
+                      <option value="BR">🇧🇷 Brazil (BR)</option>
+                    </select>
+                  </div>
                 </div>
                 
                 <div className="space-y-4">
@@ -468,7 +618,9 @@ export default function App() {
                   {festivals.map((f) => (
                     <div key={f.festival_id} className="flex items-center justify-between p-4 bg-[#fcfcfc] rounded-xl border border-gray-50 hover:bg-white hover:shadow-sm transition-all">
                       <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-[#f05c42] flex items-center justify-center text-white shadow-sm"><i className="fa-regular fa-calendar"></i></div>
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-sm ${f.isPublic ? 'bg-blue-600' : 'bg-[#f05c42]'}`}>
+                          <i className={`fa-solid ${f.isPublic ? 'fa-earth-americas' : 'fa-calendar'}`}></i>
+                        </div>
                         <div>
                           <p className="font-bold text-slate-800 text-sm">{f.name}</p>
                           <p className="text-xs text-slate-500">{f.date} • {f.type}</p>
@@ -606,31 +758,97 @@ export default function App() {
             </div>
           )}
 
+          {/* VIDEOS TAB */}
+          {activeTab === 'videos' && (
+            <div className="max-w-6xl mx-auto">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-slate-900">Video Logs</h2>
+                <p className="text-slate-500 text-sm mt-1">All generated festival greeting videos and their dispatch status</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 mb-8">
+                <div className="bg-[#3730a3] p-5 rounded-2xl text-white">
+                  <p className="text-sm opacity-80 mb-1">Total Generated</p>
+                  <p className="text-3xl font-bold">{logs.length}</p>
+                </div>
+                <div className="bg-emerald-600 p-5 rounded-2xl text-white">
+                  <p className="text-sm opacity-80 mb-1">Successfully Sent</p>
+                  <p className="text-3xl font-bold">{logs.filter(l => l.sent_status === 'Sent').length}</p>
+                </div>
+                <div className="bg-red-500 p-5 rounded-2xl text-white">
+                  <p className="text-sm opacity-80 mb-1">Failed / Pending</p>
+                  <p className="text-3xl font-bold">{logs.filter(l => l.sent_status !== 'Sent').length}</p>
+                </div>
+              </div>
+
+              {logs.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-gray-100 p-16 text-center shadow-sm">
+                  <div className="w-16 h-16 bg-purple-50 text-purple-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl"><i className="fa-solid fa-film"></i></div>
+                  <h3 className="font-bold text-xl text-slate-800 mb-1">No Videos Yet</h3>
+                  <p className="text-slate-500 text-sm">Videos will appear here after you dispatch them from the Dashboard or Companies tab.</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="font-bold text-slate-800">All Video Records</h3>
+                    <span className="text-xs text-slate-400">{logs.length} total entries</span>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {logs.map((l) => (
+                      <div key={l.log_id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm ${ l.sent_status === 'Sent' ? 'bg-emerald-500' : 'bg-red-400'}`}>
+                            <i className={`fa-solid ${l.sent_status === 'Sent' ? 'fa-circle-check' : 'fa-circle-xmark'}`}></i>
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800 text-sm">{l.company_name}</p>
+                            <p className="text-xs text-slate-400">
+                              <i className="fa-brands fa-whatsapp text-green-500 mr-1"></i>{l.whatsapp}
+                              &nbsp;·&nbsp;<i className="fa-solid fa-calendar text-orange-400 mr-1"></i>{l.festival_name}
+                              &nbsp;·&nbsp;{l.sent_at ? new Date(l.sent_at).toLocaleString() : 'N/A'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${ l.sent_status === 'Sent' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                          {l.sent_status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* USERS TAB */}
           {activeTab === 'users' && (
-            <div className="max-w-6xl mx-auto animate-fade-in">
+            <div className="max-w-6xl mx-auto">
               <div className="flex justify-between items-center mb-8">
                 <div>
                   <h2 className="text-3xl font-bold text-slate-900 mb-1">User Management</h2>
-                  <p className="text-slate-500 text-sm">System Access Control List</p>
+                  <p className="text-slate-500 text-sm">System Access Control — Max 5 Admins, 30 Agents</p>
                 </div>
-                <button className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-orange-600 transition-colors shadow-sm"><i className="fa-solid fa-plus"></i> Add User</button>
+                {currentUser.role === 'Admin' && (
+                  <button onClick={() => setIsAddUserModalOpen(true)} className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 hover:bg-orange-600 transition-colors shadow-sm">
+                    <i className="fa-solid fa-plus"></i> Add User
+                  </button>
+                )}
               </div>
               
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
                 {usersList.length === 0 ? (
-                  <p className="text-slate-400 text-sm p-8 text-center">Loading users...</p>
+                  <p className="text-slate-400 text-sm p-8 text-center">No users found. {currentUser.role !== 'Admin' && '(Admin-only view)'}</p>
                 ) : (
                   <div className="divide-y divide-gray-100">
                     {usersList.map((u, i) => (
-                      <div key={i} className="p-5 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                      <div key={u.user_id || i} className="p-5 flex justify-between items-center hover:bg-slate-50 transition-colors">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-[#28325a] text-white flex items-center justify-center font-bold text-sm shadow-sm">
-                            {u.name?.charAt(0) || 'U'}
+                            {u.name?.charAt(0)?.toUpperCase() || 'U'}
                           </div>
                           <div>
                             <p className="font-bold text-slate-800 text-sm">{u.name}</p>
-                            <p className="text-slate-400 text-xs">{u.email}</p>
+                            <p className="text-slate-400 text-xs">{u.email} · Joined {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A'}</p>
                           </div>
                         </div>
                         {u.role === 'Admin' ? 
@@ -647,38 +865,177 @@ export default function App() {
           )}
 
           {/* CALENDAR TAB */}
-          {activeTab === 'calendar' && (
-            <div className="max-w-6xl mx-auto animate-fade-in h-full flex flex-col">
-              <h2 className="text-3xl font-bold text-slate-900 mb-1">Festival Calendar</h2>
-              <p className="text-slate-500 text-sm mb-6">Indian festivals & holidays — videos auto-generate 1 day before each event</p>
-              
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex-1 p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <button className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600"><i className="fa-solid fa-chevron-left text-xs"></i></button>
-                  <h3 className="font-bold text-lg text-slate-800">May 2026</h3>
-                  <button className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600"><i className="fa-solid fa-chevron-right text-xs"></i></button>
-                </div>
+          {activeTab === 'calendar' && (() => {
+            const year = calendarDate.getFullYear()
+            const month = calendarDate.getMonth()
+            const firstDay = new Date(year, month, 1).getDay()
+            const daysInMonth = new Date(year, month + 1, 0).getDate()
+            const emptyCount = firstDay === 0 ? 6 : firstDay - 1
+            
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+            
+            const days = []
+            for (let i = 0; i < emptyCount; i++) {
+              days.push({ empty: true, key: `empty-${i}` })
+            }
+            for (let i = 1; i <= daysInMonth; i++) {
+              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
+              const dayFestivals = festivals.filter(f => f.date === dateStr)
+              days.push({ empty: false, day: i, dateStr, festivals: dayFestivals, key: `day-${i}` })
+            }
+
+            return (
+              <div className="max-w-6xl mx-auto animate-fade-in h-full flex flex-col">
+                <h2 className="text-3xl font-bold text-slate-900 mb-1">Festival Calendar</h2>
+                <p className="text-slate-500 text-sm mb-6">Indian festivals & holidays — auto-synced with Google Sheets database</p>
                 
-                <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-xl overflow-hidden border border-gray-100">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                    <div key={d} className="bg-white p-3 text-center text-xs font-medium text-slate-400">{d}</div>
-                  ))}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex-1 p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-2 bg-slate-50 border border-gray-200 px-3 py-1.5 rounded-xl shadow-sm">
+                      <span className="text-xs font-bold text-slate-600"><i className="fa-solid fa-earth-americas text-orange-500"></i> Public API:</span>
+                      <select 
+                        value={holidayCountry} 
+                        onChange={(e) => setHolidayCountry(e.target.value)}
+                        className="bg-transparent text-slate-800 text-xs font-bold outline-none cursor-pointer"
+                      >
+                        <option value="IN">🇮🇳 India (IN)</option>
+                        <option value="US">🇺🇸 United States (US)</option>
+                        <option value="GB">🇬🇧 United Kingdom (GB)</option>
+                        <option value="CA">🇨🇦 Canada (CA)</option>
+                        <option value="AU">🇦🇺 Australia (AU)</option>
+                        <option value="DE">🇩🇪 Germany (DE)</option>
+                        <option value="FR">🇫🇷 France (FR)</option>
+                        <option value="IT">🇮🇹 Italy (IT)</option>
+                        <option value="ES">🇪🇸 Spain (ES)</option>
+                        <option value="JP">🇯🇵 Japan (JP)</option>
+                        <option value="BR">🇧🇷 Brazil (BR)</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => setCalendarDate(new Date(year, month - 1, 1))}
+                        className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 shadow-sm border border-gray-200 font-bold"
+                      >
+                        <i className="fa-solid fa-chevron-left text-xs"></i>
+                      </button>
+                      <h3 className="font-bold text-xl text-slate-800 min-w-[140px] text-center">
+                        {monthNames[month]} {year}
+                      </h3>
+                      <button 
+                        onClick={() => setCalendarDate(new Date(year, month + 1, 1))}
+                        className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-600 shadow-sm border border-gray-200 font-bold"
+                      >
+                        <i className="fa-solid fa-chevron-right text-xs"></i>
+                      </button>
+                    </div>
+                  </div>
                   
-                  {/* Empty days */}
-                  {Array(4).fill(0).map((_, i) => <div key={'e'+i} className="bg-white h-24 p-2 opacity-40"></div>)}
-                  
-                  {/* Days */}
-                  {Array(31).fill(0).map((_, i) => {
-                    const d = i + 1;
-                    const hasEvent = d === 1 || d === 27;
-                    return (
-                      <div key={d} className="bg-white h-24 p-2 relative group hover:bg-slate-50 transition-colors cursor-pointer">
-                        <span className={`text-xs font-medium ${d===16 ? 'w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center' : 'text-slate-600'}`}>{d}</span>
-                        {d === 1 && <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 px-1 py-0.5 rounded truncate"><i className="fa-solid fa-star text-orange-400"></i> May Day</div>}
-                        {d === 27 && <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 px-1 py-0.5 rounded truncate"><i className="fa-solid fa-star text-orange-400"></i> Eid-ul-Adha</div>}
+                  <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-xl overflow-hidden border border-gray-100">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                      <div key={d} className="bg-white p-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">{d}</div>
+                    ))}
+                    
+                    {days.map(item => {
+                      if (item.empty) {
+                        return <div key={item.key} className="bg-white h-28 p-2 opacity-30"></div>
+                      }
+                      const isToday = item.dateStr === new Date().toISOString().split('T')[0]
+                      return (
+                        <div key={item.key} className="bg-white h-28 p-2.5 relative group hover:bg-slate-50 transition-colors flex flex-col justify-between border-t border-gray-50">
+                          <div className="flex justify-between items-start">
+                            <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isToday ? 'bg-orange-500 text-white shadow-md' : 'text-slate-700'}`}>
+                              {item.day}
+                            </span>
+                          </div>
+                          <div className="space-y-1 overflow-y-auto max-h-16 pt-1">
+                            {item.festivals.map(f => (
+                              <div 
+                                key={f.festival_id} 
+                                className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg shadow-sm truncate border ${
+                                  f.isPublic 
+                                    ? 'bg-blue-50 text-blue-700 border-blue-100' 
+                                    : 'bg-orange-50 text-orange-700 border-orange-100'
+                                }`}
+                              >
+                                <i className={`fa-solid ${f.isPublic ? 'fa-earth-americas text-blue-500' : 'fa-wand-magic-sparkles text-orange-500'}`}></i> {f.name}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* SETTINGS TAB */}
+          {activeTab === 'settings' && (
+            <div className="max-w-4xl mx-auto animate-fade-in">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-slate-900 mb-1">Account Settings</h2>
+                <p className="text-slate-500 text-sm">Manage your profile, platform preferences, and security configurations</p>
+              </div>
+
+              {/* PROFILE CARD */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-8">
+                <div className="bg-gradient-to-r from-[#28325a] to-[#3b436e] p-8 text-white flex items-center gap-6 relative overflow-hidden">
+                  <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+                  <div className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-orange-500 to-pink-500 flex items-center justify-center text-white font-extrabold text-4xl shadow-xl border-2 border-white/20 z-10">
+                    {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="z-10">
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="text-2xl font-bold">{currentUser.name || 'Active User'}</h3>
+                      <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-extrabold shadow-sm uppercase tracking-wider">{currentUser.role || 'Admin'}</span>
+                    </div>
+                    <p className="text-slate-300 text-sm mb-4 flex items-center gap-2">
+                      <i className="fa-solid fa-envelope text-orange-400"></i> {currentUser.email || 'user@example.com'}
+                    </p>
+                    <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10">
+                      <i className="fa-solid fa-fingerprint text-pink-400"></i> User ID: {currentUser.user_id || 'sys-default-id'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-8 space-y-6">
+                  <div className="grid grid-cols-2 gap-6 pb-6 border-b border-gray-50">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Account Status</h4>
+                      <p className="text-sm font-bold text-emerald-600 flex items-center gap-1.5">
+                        <i className="fa-solid fa-circle-check"></i> Active & Verified
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Permission Level</h4>
+                      <p className="text-sm font-bold text-slate-800">
+                        {currentUser.role === 'Admin' ? 'Full System Access (Dashboard, Users, Dispatch)' : 'Agent Onboarding & Client Management'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-base mb-4">Security & API Preferences</h4>
+                    <div className="space-y-4 text-sm text-slate-600">
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-gray-100">
+                        <div>
+                          <p className="font-bold text-slate-800">Two-Factor Authentication (2FA)</p>
+                          <p className="text-xs text-slate-400">Protect your account with an additional security layer</p>
+                        </div>
+                        <span className="bg-slate-200 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">Disabled</span>
                       </div>
-                    )
-                  })}
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-gray-100">
+                        <div>
+                          <p className="font-bold text-slate-800">Meta WhatsApp Cloud API Connection</p>
+                          <p className="text-xs text-slate-400">Status of your configured WhatsApp token and webhook</p>
+                        </div>
+                        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
+                          <i className="fa-solid fa-circle-check"></i> Connected
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -690,24 +1047,64 @@ export default function App() {
       {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
               <h3 className="font-bold text-xl text-slate-900">Add Company</h3>
               <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-400"><i className="fa-solid fa-xmark"></i></button>
             </div>
-            <form onSubmit={handleCreateCompany} className="p-6 space-y-5">
+            <form onSubmit={handleCreateCompany} className="p-6 space-y-5 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Company Name</label><input name="company_name" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
                 <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Owner Name</label><input name="owner_name" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
-                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">WhatsApp Number</label><input name="whatsapp" placeholder="e.g. 919876543210" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
+                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">WhatsApp Number</label><input name="whatsapp" placeholder="e.g. 919876543210 (with country code)" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
                 <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Subscription Until</label><input name="subscription_end" type="date" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
-                <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Company Address</label><input name="address" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
+                <div className="col-span-2"><label className="block text-xs font-bold text-slate-700 mb-1.5">Company Address</label><input name="address" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm" required/></div>
                 <div><label className="block text-xs font-bold text-slate-700 mb-1.5">Company Logo</label><input name="logo" type="file" accept="image/*" className="w-full bg-slate-50 border border-gray-200 p-1.5 rounded-lg text-sm" required/></div>
-                <div className="col-span-2"><label className="block text-xs font-bold text-slate-700 mb-1.5">Product/Company Photos (Select 8 to 10 photos)</label><input name="photos" type="file" accept="image/*" multiple className="w-full bg-slate-50 border border-gray-200 p-1.5 rounded-lg text-sm" required/></div>
+                <div className="col-span-2"><label className="block text-xs font-bold text-slate-700 mb-1.5">Product / Company Photos <span className="text-orange-500">(Select exactly 8 to 10 photos)</span></label><input name="photos" type="file" accept="image/*" multiple className="w-full bg-slate-50 border border-gray-200 p-1.5 rounded-lg text-sm" required/></div>
               </div>
-              <div className="pt-4 flex justify-end gap-3 border-t border-gray-100 mt-6">
+              <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg font-bold">Cancel</button>
                 <button type="submit" disabled={isSubmitting} className="px-5 py-2 text-sm bg-orange-500 text-white rounded-lg font-bold shadow hover:bg-orange-600 transition-colors">{isSubmitting ? "Uploading assets..." : "Save Company"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD USER MODAL - Admin Only */}
+      {isAddUserModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-xl text-slate-900">Add New User</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Max: 5 Admins, 30 Agents</p>
+              </div>
+              <button onClick={() => setIsAddUserModalOpen(false)} className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-400"><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onSubmit={handleAddUser} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Full Name</label>
+                <input name="name" type="text" placeholder="e.g. Priya Sharma" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-orange-400/50" required/>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Email Address</label>
+                <input name="email" type="email" placeholder="e.g. priya@festivai.com" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-orange-400/50" required/>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Password</label>
+                <input name="password" type="password" placeholder="Min. 8 characters" minLength={8} className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-orange-400/50" required/>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Role</label>
+                <select name="role" className="w-full bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-orange-400/50" required>
+                  <option value="Agent">Agent (can onboard clients)</option>
+                  <option value="Admin">Admin (full system access)</option>
+                </select>
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
+                <button type="button" onClick={() => setIsAddUserModalOpen(false)} className="px-5 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg font-bold">Cancel</button>
+                <button type="submit" disabled={isAddingUser} className="px-5 py-2 text-sm bg-orange-500 text-white rounded-lg font-bold shadow hover:bg-orange-600 transition-colors">{isAddingUser ? "Creating..." : "Create User"}</button>
               </div>
             </form>
           </div>

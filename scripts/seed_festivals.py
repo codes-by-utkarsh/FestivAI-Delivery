@@ -1,33 +1,42 @@
-from database import init_db, get_festivals_sheet
+import os
 import uuid
+import sys
 
-def seed_festivals():
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import dotenv
+dotenv.load_dotenv()
+
+from database import init_db, get_festivals_sheet, INDIAN_FESTIVALS_2025_2026
+
+
+def seed_festivals(force: bool = False):
     sheet = init_db()
     if not sheet:
-        print("Database could not be initialized.")
+        print("❌ Database could not be initialized. Check credentials.json and .env.")
         return
 
     festivals_ws = get_festivals_sheet(sheet)
     existing = festivals_ws.get_all_records()
-    if len(existing) > 0:
-        print("Festivals already seeded.")
+
+    if len(existing) > 0 and not force:
+        print(f"⚠️  Festivals already seeded ({len(existing)} records). Use --force to re-seed.")
         return
 
-    festivals = [
-        {"date": "2026-01-14", "name": "Makar Sankranti", "type": "Hindu"},
-        {"date": "2026-01-26", "name": "Republic Day", "type": "National"},
-        {"date": "2026-03-03", "name": "Holi", "type": "Hindu"},
-        {"date": "2026-08-15", "name": "Independence Day", "type": "National"},
-        {"date": "2026-10-02", "name": "Gandhi Jayanti", "type": "National"},
-        {"date": "2026-10-18", "name": "Dussehra", "type": "Hindu"},
-        {"date": "2026-11-08", "name": "Diwali", "type": "Hindu"},
-        # Add more as required. Dates are placeholders for 2026.
-    ]
+    if force and len(existing) > 0:
+        print(f"⚠️  Force mode: clearing {len(existing)} existing records...")
+        festivals_ws.clear()
+        festivals_ws.append_row(["festival_id", "date", "name", "type"])
 
-    for f in festivals:
-        festivals_ws.append_row([str(uuid.uuid4()), f["date"], f["name"], f["type"]])
+    rows = []
+    for f in INDIAN_FESTIVALS_2025_2026:
+        rows.append([str(uuid.uuid4()), f["date"], f["name"], f["type"]])
 
-    print("Festivals seeded successfully!")
+    # Batch insert
+    festivals_ws.append_rows(rows)
+    print(f"✅ Successfully seeded {len(rows)} Indian festivals (2025-2026)!")
+
 
 if __name__ == "__main__":
-    seed_festivals()
+    force = "--force" in sys.argv
+    seed_festivals(force=force)

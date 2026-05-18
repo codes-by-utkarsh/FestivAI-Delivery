@@ -12,3 +12,5 @@ apscheduler
 requests
 python-dotenv
 google-auth
+pytz
+numpy

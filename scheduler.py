@@ -10,10 +10,14 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL", "https://graph.facebook.com/v17.0/YOUR_PHONE_NUMBER_ID/messages")
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+
 
 def upload_video_to_meta(video_path: str) -> str:
+    WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL")
+    WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+    if not WHATSAPP_API_URL or not WHATSAPP_TOKEN:
+        logger.error("WhatsApp credentials not configured (WHATSAPP_API_URL / WHATSAPP_TOKEN missing in .env). Cannot upload media.")
+        return None
     media_url = WHATSAPP_API_URL.replace("/messages", "/media")
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}"
@@ -40,7 +44,12 @@ def upload_video_to_meta(video_path: str) -> str:
         logger.error(f"Media upload exception: {e}")
         return None
 
-def send_whatsapp_video(whatsapp_number: str, media_id: str, template_name: str="hello_world") -> bool:
+def send_whatsapp_video(whatsapp_number: str, media_id: str, template_name: str = "hello_world") -> bool:
+    WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL")
+    WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+    if not WHATSAPP_API_URL or not WHATSAPP_TOKEN:
+        logger.error("WhatsApp credentials not configured. Cannot send message.")
+        return False
     if not media_id:
         logger.error("No valid media_id provided. Cannot send WhatsApp message.")
         return False
