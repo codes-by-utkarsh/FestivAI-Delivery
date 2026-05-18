@@ -224,7 +224,10 @@ def get_me(current_user: dict = Depends(require_role(["Admin", "Agent"]))):
 def get_customers(current_user: dict = Depends(require_role(["Admin", "Agent"]))):
     sheet = init_db()
     customers_ws = get_customers_sheet(sheet)
-    customers = customers_ws.get_all_records()
+    raw_customers = customers_ws.get_all_records()
+
+    # Filter out empty/blank rows from Google Sheets
+    customers = [c for c in raw_customers if c.get("customer_id")]
 
     if current_user.get("role") == "Agent":
         customers = [c for c in customers if str(c.get("agent_id")) == str(current_user.get("user_id"))]

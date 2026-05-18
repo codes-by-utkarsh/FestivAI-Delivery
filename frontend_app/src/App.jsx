@@ -129,9 +129,10 @@ export default function App() {
       const resComp = await fetch(`${API_BASE}/customers`, { headers })
       if (resComp.ok) {
         const dataComp = await resComp.json()
-        setCompanies(dataComp.customers || [])
-        if (dataComp.customers?.length > 0 && !dashboardSelectedCompany) {
-          setDashboardSelectedCompany(dataComp.customers[0].customer_id)
+        const validList = (dataComp.customers || []).filter(c => c && c.customer_id)
+        setCompanies(validList)
+        if (validList.length > 0 && !dashboardSelectedCompany) {
+          setDashboardSelectedCompany(validList[0].customer_id)
         }
       }
 
@@ -346,10 +347,11 @@ export default function App() {
   }
 
   const toggleAllCompanies = () => {
-    if (selectedCompanies.size === companies.length) {
+    const validCompanies = companies.filter(c => c && c.customer_id)
+    if (selectedCompanies.size === validCompanies.length) {
       setSelectedCompanies(new Set())
     } else {
-      setSelectedCompanies(new Set(companies.map(c => c.customer_id)))
+      setSelectedCompanies(new Set(validCompanies.map(c => c.customer_id)))
     }
   }
 
