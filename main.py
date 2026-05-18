@@ -10,7 +10,7 @@ from datetime import datetime
 import dotenv
 import os
 from fastapi import UploadFile, File, Form
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 import logging
 
 dotenv.load_dotenv(override=True)
@@ -51,16 +51,16 @@ class RegisterData(BaseModel):
     role: str
 
 class SendWhatsAppRequest(BaseModel):
-    customer_id: str
+    customer_id: Union[str, int]
     festival_name: str
     template_name: str = "hello_world"
 
 class GenerateVideoRequest(BaseModel):
-    customer_id: str
+    customer_id: Union[str, int]
     festival_name: str
 
 class BulkGenerateRequest(BaseModel):
-    customer_ids: List[str]
+    customer_ids: List[Union[str, int]]
     festival_name: str
     send_whatsapp: bool = False
     template_name: str = "hello_world"
@@ -310,7 +310,7 @@ def get_festivals(current_user: dict = Depends(require_role(["Admin", "Agent"]))
     sheet = init_db()
     festivals_ws = sheet.worksheet("Festivals")
     festivals = festivals_ws.get_all_records()
-    festivals.sort(key=lambda x: x.get("date", ""))
+    festivals.sort(key=lambda x: str(x.get("date") or ""))
     return {"festivals": festivals}
 
 
@@ -646,7 +646,7 @@ def get_logs(current_user: dict = Depends(require_role(["Admin", "Agent"]))):
         })
 
     # Sort by most recent first
-    result.sort(key=lambda x: x.get("sent_at", ""), reverse=True)
+    result.sort(key=lambda x: str(x.get("sent_at") or ""), reverse=True)
     return {"logs": result}
 
 
