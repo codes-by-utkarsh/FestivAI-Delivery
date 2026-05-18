@@ -857,37 +857,74 @@ export default function App() {
           {/* WHATSAPP TAB */}
           {activeTab === 'whatsapp' && (
             <div className="max-w-6xl mx-auto animate-fade-in">
-              <h2 className="text-3xl font-bold text-slate-900 mb-1">WhatsApp Distribution Logs</h2>
-              <p className="text-slate-500 text-sm mb-6">Real-time delivery records from Meta Cloud API</p>
-              
-              <div className="bg-[#f97316] rounded-xl p-6 text-white mb-8 shadow-sm">
-                <div className="flex gap-3">
-                  <i className="fa-regular fa-comment mt-1"></i>
+              <div className="mb-6">
+                <h2 className="text-3xl font-bold text-slate-900">WhatsApp Delivery</h2>
+                <p className="text-slate-500 text-sm mt-1">Meta Cloud API dispatch logs and pipeline status</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-5 mb-6">
+                <div className="bg-green-600 p-5 rounded-2xl text-white shadow-sm">
+                  <i className="fa-brands fa-whatsapp text-2xl opacity-70 mb-2"></i>
+                  <p className="text-3xl font-bold">{logs.filter(l => l.sent_status === 'Sent').length}</p>
+                  <p className="text-sm opacity-80 mt-1">Successfully Delivered</p>
+                </div>
+                <div className="bg-red-500 p-5 rounded-2xl text-white shadow-sm">
+                  <i className="fa-solid fa-circle-xmark text-2xl opacity-70 mb-2"></i>
+                  <p className="text-3xl font-bold">{logs.filter(l => l.sent_status !== 'Sent').length}</p>
+                  <p className="text-sm opacity-80 mt-1">Failed / Pending</p>
+                </div>
+                <div className="bg-[#28325a] p-5 rounded-2xl text-white shadow-sm">
+                  <i className="fa-solid fa-chart-line text-2xl opacity-70 mb-2"></i>
+                  <p className="text-3xl font-bold">{logs.length ? Math.round((logs.filter(l => l.sent_status === 'Sent').length / logs.length) * 100) : 0}%</p>
+                  <p className="text-sm opacity-80 mt-1">Delivery Rate</p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl p-5 text-white mb-6 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0"><i className="fa-brands fa-whatsapp text-lg"></i></div>
                   <div>
-                    <h3 className="font-bold text-lg mb-1">Automated Delivery Pipeline</h3>
-                    <p className="text-sm opacity-90">Videos are dynamically generated via MoviePy and dispatched instantly using Meta's Cloud Media API. View the live delivery history below.</p>
+                    <h3 className="font-bold text-lg">Automated Delivery Pipeline — Meta Cloud API</h3>
+                    <p className="text-sm opacity-90 mt-1">Videos are generated via MoviePy, uploaded to Meta Media API, then dispatched via direct video message with automatic template fallback.</p>
+                    <div className="flex gap-3 mt-3 text-xs">
+                      <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">✅ Template → Direct Video Fallback</span>
+                      <span className="bg-white/20 px-3 py-1 rounded-full font-semibold">✅ Auto-retry on failure</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100"><h3 className="font-bold text-slate-800">Delivery Log</h3></div>
+                <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="font-bold text-slate-800">Delivery Log</h3>
+                  <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full">{logs.length} total records</span>
+                </div>
                 {logs.length === 0 ? (
-                  <p className="text-slate-400 text-sm p-8 text-center">No WhatsApp dispatch logs recorded yet.</p>
+                  <p className="text-slate-400 text-sm p-10 text-center">No dispatch logs recorded yet. Send your first video from the Companies tab!</p>
                 ) : (
                   <div className="divide-y divide-gray-50">
                     {logs.map((l) => (
-                      <div key={l.log_id} className="p-6 flex items-center justify-between hover:bg-slate-50">
-                        <div className="flex items-center gap-4">
-                          <i className="fa-regular fa-comment text-slate-400"></i>
-                          <div>
+                      <div key={l.log_id} className="p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${l.sent_status === 'Sent' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-500'}`}>
+                          <i className={`fa-solid ${l.sent_status === 'Sent' ? 'fa-check' : 'fa-xmark'} text-sm`}></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
                             <p className="font-bold text-slate-800 text-sm">{l.company_name}</p>
-                            <p className="text-xs text-slate-400">{l.whatsapp} • {l.festival_name} • {new Date(l.sent_at).toLocaleString()}</p>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${l.sent_status === 'Sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{l.sent_status}</span>
                           </div>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            <i className="fa-brands fa-whatsapp text-green-500 mr-1"></i>{l.whatsapp}
+                            &nbsp;·&nbsp;<i className="fa-solid fa-calendar text-orange-400 mr-1"></i>{l.festival_name}
+                            &nbsp;·&nbsp;{l.sent_at ? new Date(l.sent_at).toLocaleString() : 'N/A'}
+                          </p>
                         </div>
-                        <div className={`flex items-center gap-2 font-bold text-sm ${l.sent_status === 'Sent' ? 'text-green-600' : 'text-red-600'}`}>
-                          <i className={`fa-regular ${l.sent_status === 'Sent' ? 'fa-circle-check' : 'fa-circle-xmark'}`}></i> {l.sent_status}
-                        </div>
+                        {l.media_id && (
+                          <div className="text-right shrink-0">
+                            <p className="text-[10px] text-slate-400 font-mono">Media ID</p>
+                            <p className="text-xs text-slate-600 font-mono font-bold">{String(l.media_id).slice(0,14)}…</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -899,23 +936,27 @@ export default function App() {
           {/* VIDEOS TAB */}
           {activeTab === 'videos' && (
             <div className="max-w-6xl mx-auto">
-              <div className="mb-8">
+              <div className="mb-6">
                 <h2 className="text-3xl font-bold text-slate-900">Video Logs</h2>
-                <p className="text-slate-500 text-sm mt-1">All generated festival greeting videos and their dispatch status</p>
+                <p className="text-slate-500 text-sm mt-1">All generated festival greeting videos, delivery status, and Meta Media IDs</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 mb-8">
-                <div className="bg-[#3730a3] p-5 rounded-2xl text-white">
-                  <p className="text-sm opacity-80 mb-1">Total Generated</p>
-                  <p className="text-3xl font-bold">{logs.length}</p>
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                <div className="bg-[#3730a3] p-5 rounded-2xl text-white shadow-sm">
+                  <p className="text-xs opacity-70 font-semibold uppercase tracking-wide">Total Generated</p>
+                  <p className="text-3xl font-bold mt-1">{logs.length}</p>
                 </div>
-                <div className="bg-emerald-600 p-5 rounded-2xl text-white">
-                  <p className="text-sm opacity-80 mb-1">Successfully Sent</p>
-                  <p className="text-3xl font-bold">{logs.filter(l => l.sent_status === 'Sent').length}</p>
+                <div className="bg-emerald-600 p-5 rounded-2xl text-white shadow-sm">
+                  <p className="text-xs opacity-70 font-semibold uppercase tracking-wide">Sent via WhatsApp</p>
+                  <p className="text-3xl font-bold mt-1">{logs.filter(l => l.sent_status === 'Sent').length}</p>
                 </div>
-                <div className="bg-red-500 p-5 rounded-2xl text-white">
-                  <p className="text-sm opacity-80 mb-1">Failed / Pending</p>
-                  <p className="text-3xl font-bold">{logs.filter(l => l.sent_status !== 'Sent').length}</p>
+                <div className="bg-red-500 p-5 rounded-2xl text-white shadow-sm">
+                  <p className="text-xs opacity-70 font-semibold uppercase tracking-wide">Failed / Pending</p>
+                  <p className="text-3xl font-bold mt-1">{logs.filter(l => l.sent_status !== 'Sent').length}</p>
+                </div>
+                <div className="bg-orange-500 p-5 rounded-2xl text-white shadow-sm">
+                  <p className="text-xs opacity-70 font-semibold uppercase tracking-wide">Success Rate</p>
+                  <p className="text-3xl font-bold mt-1">{logs.length ? Math.round(logs.filter(l => l.sent_status === 'Sent').length / logs.length * 100) : 0}%</p>
                 </div>
               </div>
 
@@ -923,33 +964,47 @@ export default function App() {
                 <div className="bg-white rounded-2xl border border-gray-100 p-16 text-center shadow-sm">
                   <div className="w-16 h-16 bg-purple-50 text-purple-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl"><i className="fa-solid fa-film"></i></div>
                   <h3 className="font-bold text-xl text-slate-800 mb-1">No Videos Yet</h3>
-                  <p className="text-slate-500 text-sm">Videos will appear here after you dispatch them from the Dashboard or Companies tab.</p>
+                  <p className="text-slate-500 text-sm">Videos will appear here once you dispatch from the Companies tab.</p>
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                   <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                     <h3 className="font-bold text-slate-800">All Video Records</h3>
-                    <span className="text-xs text-slate-400">{logs.length} total entries</span>
+                    <span className="text-xs text-slate-400">{logs.length} entries · sorted newest first</span>
                   </div>
                   <div className="divide-y divide-gray-50">
-                    {logs.map((l) => (
-                      <div key={l.log_id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm ${ l.sent_status === 'Sent' ? 'bg-emerald-500' : 'bg-red-400'}`}>
-                            <i className={`fa-solid ${l.sent_status === 'Sent' ? 'fa-circle-check' : 'fa-circle-xmark'}`}></i>
+                    {logs.map((l, i) => (
+                      <div key={l.log_id || i} className="p-5 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm shrink-0 ${l.sent_status === 'Sent' ? 'bg-emerald-500' : 'bg-red-400'}`}>
+                            <i className={`fa-solid ${l.sent_status === 'Sent' ? 'fa-circle-check' : 'fa-circle-xmark'} text-sm`}></i>
                           </div>
-                          <div>
-                            <p className="font-bold text-slate-800 text-sm">{l.company_name}</p>
-                            <p className="text-xs text-slate-400">
-                              <i className="fa-brands fa-whatsapp text-green-500 mr-1"></i>{l.whatsapp}
-                              &nbsp;·&nbsp;<i className="fa-solid fa-calendar text-orange-400 mr-1"></i>{l.festival_name}
-                              &nbsp;·&nbsp;{l.sent_at ? new Date(l.sent_at).toLocaleString() : 'N/A'}
-                            </p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-slate-800">{l.company_name}</p>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${l.sent_status === 'Sent' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                                {l.sent_status === 'Sent' ? '✅ Sent' : '❌ Failed'}
+                              </span>
+                            </div>
+                            <div className="flex gap-4 mt-1.5 flex-wrap">
+                              <span className="text-xs text-slate-500"><i className="fa-brands fa-whatsapp text-green-500 mr-1"></i>{l.whatsapp}</span>
+                              <span className="text-xs text-slate-500"><i className="fa-solid fa-calendar text-orange-400 mr-1"></i>{l.festival_name}</span>
+                              <span className="text-xs text-slate-400"><i className="fa-regular fa-clock mr-1"></i>{l.sent_at ? new Date(l.sent_at).toLocaleString() : 'N/A'}</span>
+                            </div>
+                            {l.media_id && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Meta Media ID:</span>
+                                <code className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{l.media_id}</code>
+                                <button onClick={() => navigator.clipboard.writeText(l.media_id)} className="text-[10px] text-slate-400 hover:text-orange-500 transition-colors">
+                                  <i className="fa-regular fa-copy"></i>
+                                </button>
+                              </div>
+                            )}
+                            {l.sent_status !== 'Sent' && (
+                              <p className="mt-1.5 text-xs text-red-400"><i className="fa-solid fa-triangle-exclamation mr-1"></i>Delivery failed — check Meta token validity or customer service window (24h rule).</p>
+                            )}
                           </div>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${ l.sent_status === 'Sent' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                          {l.sent_status}
-                        </span>
                       </div>
                     ))}
                   </div>
@@ -1297,6 +1352,28 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* TOAST NOTIFICATIONS */}
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} className={`flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg text-white text-sm font-medium pointer-events-auto transition-all ${
+            t.type === 'success' ? 'bg-emerald-600' :
+            t.type === 'error'   ? 'bg-red-600' :
+            t.type === 'warning' ? 'bg-amber-500' :
+            'bg-[#28325a]'
+          }`}>
+            <i className={`fa-solid mt-0.5 ${
+              t.type === 'success' ? 'fa-circle-check' :
+              t.type === 'error'   ? 'fa-circle-xmark' :
+              t.type === 'warning' ? 'fa-triangle-exclamation' :
+              'fa-circle-info'
+            }`}></i>
+            <span className="leading-snug">{t.message}</span>
+            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="ml-auto shrink-0 opacity-70 hover:opacity-100">
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
