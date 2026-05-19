@@ -12,6 +12,7 @@ import os
 from fastapi import UploadFile, File, Form
 from typing import List, Optional, Union, Any
 import logging
+import cloud_storage
 
 dotenv.load_dotenv(override=True)
 logger = logging.getLogger(__name__)
@@ -272,15 +273,11 @@ def create_customer(
     if not wa_number.isdigit() or len(wa_number) < 10:
         raise HTTPException(status_code=400, detail="Invalid WhatsApp number. Use format: 919876543210")
 
-    upload_dir = "uploads"
-    os.makedirs(upload_dir, exist_ok=True)
-
     # Save logo
     logo_ext = os.path.splitext(logo.filename)[1] if logo.filename else ".jpg"
     logo_filename = f"logo_{uuid.uuid4().hex}{logo_ext}"
-    logo_path = os.path.join(upload_dir, logo_filename)
-    with open(logo_path, "wb") as f:
-        f.write(logo.file.read())
+    logo_content = logo.file.read()
+    logo_url = cloud_storage.upload_image(logo_content, logo_filename, logo.content_type or "image/jpeg")
 
     # Save photos
     photo_urls = [""] * 10
@@ -289,11 +286,9 @@ def create_customer(
             break
         p_ext = os.path.splitext(photo.filename)[1] if photo.filename else ".jpg"
         p_filename = f"photo_{uuid.uuid4().hex}{p_ext}"
-        p_path = os.path.join(upload_dir, p_filename)
-        with open(p_path, "wb") as f:
-            f.write(photo.file.read())
-        # Store absolute path for video engine to use locally
-        photo_urls[i] = os.path.abspath(p_path)
+        photo_content = photo.file.read()
+        p_url = cloud_storage.upload_image(photo_content, p_filename, photo.content_type or "image/jpeg")
+        photo_urls[i] = p_url
 
     sheet = init_db()
     customers_ws = get_customers_sheet(sheet)
@@ -306,7 +301,7 @@ def create_customer(
         owner_name,
         wa_number,
         address,
-        os.path.abspath(logo_path),
+        logo_url,
         *photo_urls,
         subscription_end,
         0,
