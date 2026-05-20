@@ -25,8 +25,8 @@ from PIL import Image, ImageDraw, ImageFont
 logger = logging.getLogger(__name__)
 
 CONFIG = {
-    "width": 1080,
-    "height": 1080,
+    "width": 720,
+    "height": 720,
     "min_duration": 20,
     "max_duration": 30,
     "fps": 24,
@@ -334,7 +334,8 @@ def generate_video(customer_data: dict, festival_name: str,
             fps=fps,
             codec="libx264",
             audio_codec="aac",
-            threads=4,
+            threads=1,
+            preset="ultrafast",
             logger=None,
         )
         logger.info("Video created: %s", out_path)
