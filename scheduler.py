@@ -54,6 +54,12 @@ def send_whatsapp_video(whatsapp_number: str, media_id: str, template_name: str 
         logger.error("No valid media_id provided. Cannot send WhatsApp message.")
         return False
 
+    # Clean the phone number (remove +, spaces, hyphens) to comply with Meta's format
+    whatsapp_number = ''.join(filter(str.isdigit, str(whatsapp_number)))
+    if not whatsapp_number:
+        logger.error("Invalid WhatsApp number provided.")
+        return False
+
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
