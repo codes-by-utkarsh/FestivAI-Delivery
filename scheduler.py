@@ -147,7 +147,7 @@ def daily_job():
                 last_used_photo = int(customer.get("last_used_photo") or 0)
                 next_photo_idx = get_next_photo_index(last_used_photo)
                 
-                video_path = generate_video(customer, festival_name, next_photo_idx)
+                video_path = generate_video(customer, festival_name, next_photo_idx, festival)
                 
                 if video_path:
                     customers_ws.update_cell(row_num, 19, next_photo_idx)

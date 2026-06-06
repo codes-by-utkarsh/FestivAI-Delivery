@@ -377,6 +377,28 @@ export default function App() {
     setIsBulkDispatching(false)
   }
 
+  const handleTemplateUpload = async (e, festivalId) => {
+    const file = e.target.files[0]
+    if (!file) return
+    showToast(`Uploading template to Google Drive... ⏳`, 'info')
+    const formData = new FormData()
+    formData.append('template', file)
+    try {
+      const res = await fetch(`${API_BASE}/festivals/${festivalId}/template`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      })
+      if (res.ok) {
+        showToast('Template uploaded & saved successfully! ✅', 'success')
+        fetchAllData()
+      } else {
+        const err = await res.json()
+        showToast(`Upload failed: ${err.detail}`, 'error')
+      }
+    } catch { showToast('Network error during upload.', 'error') }
+  }
+
   const handleAddFestival = async (e) => {
     e.preventDefault()
     const name = e.target.fest_name.value
@@ -1152,13 +1174,21 @@ export default function App() {
                             {item.festivals.map(f => (
                               <div 
                                 key={f.festival_id} 
-                                className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg shadow-sm truncate border ${
+                                className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg shadow-sm border ${
                                   f.isPublic 
                                     ? 'bg-blue-50 text-blue-700 border-blue-100' 
                                     : 'bg-orange-50 text-orange-700 border-orange-100'
                                 }`}
                               >
-                                <i className={`fa-solid ${f.isPublic ? 'fa-earth-americas text-blue-500' : 'fa-wand-magic-sparkles text-orange-500'}`}></i> {f.name}
+                                <div className="truncate flex-1">
+                                  <i className={`fa-solid ${f.isPublic ? 'fa-earth-americas text-blue-500' : 'fa-wand-magic-sparkles text-orange-500'}`}></i> {f.name}
+                                </div>
+                                {!f.isPublic && (
+                                  <label className="cursor-pointer text-orange-400 hover:text-orange-700 shrink-0 ml-1" title={f.template_url ? "Update Template PNG" : "Upload Template PNG"}>
+                                    <i className={`fa-solid ${f.template_url ? 'fa-image text-green-600' : 'fa-upload'}`}></i>
+                                    <input type="file" className="hidden" accept="image/png, image/jpeg" onChange={(e) => handleTemplateUpload(e, f.festival_id)} />
+                                  </label>
+                                )}
                               </div>
                             ))}
                           </div>

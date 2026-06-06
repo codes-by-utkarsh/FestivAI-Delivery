@@ -336,8 +336,39 @@ def add_festival(
         raise HTTPException(status_code=500, detail="Database connection failed.")
     festivals_ws = sheet.worksheet("Festivals")
     festival_id = str(uuid.uuid4())
-    festivals_ws.append_row([festival_id, req.date, req.name, req.type])
+    festivals_ws.append_row([festival_id, req.date, req.name, req.type, ""])
     return {"message": "Festival added.", "festival_id": festival_id}
+
+
+@app.post("/festivals/{festival_id}/template", dependencies=[Depends(require_role(["Admin", "Agent"]))])
+def upload_festival_template(
+    festival_id: str,
+    template: UploadFile = File(...),
+    current_user: dict = Depends(require_role(["Admin", "Agent"]))
+):
+    import cloud_storage
+    t_ext = os.path.splitext(template.filename)[1] if template.filename else ".png"
+    t_filename = f"fest_template_{festival_id}{t_ext}"
+    t_content = template.file.read()
+    t_url = cloud_storage.upload_image(t_content, t_filename, template.content_type or "image/png")
+
+    sheet = init_db()
+    festivals_ws = sheet.worksheet("Festivals")
+    festivals = festivals_ws.get_all_records()
+    
+    row_idx = None
+    for idx, f in enumerate(festivals):
+        if str(f.get("festival_id")) == festival_id:
+            row_idx = idx + 2
+            break
+            
+    if not row_idx:
+        raise HTTPException(status_code=404, detail="Festival not found.")
+        
+    festivals_ws.update_cell(1, 5, "template_url")
+    festivals_ws.update_cell(row_idx, 5, t_url)
+    
+    return {"message": "Template uploaded successfully.", "template_url": t_url}
 
 
 # ─── Video Generation ─────────────────────────────────────────────────────────
@@ -368,7 +399,10 @@ def generate_video_endpoint(
     last_used_photo = int(customer.get("last_used_photo") or 0)
     next_photo_idx = get_next_photo_index(last_used_photo)
 
-    video_path = generate_video(customer, req.festival_name, next_photo_idx)
+    festivals_ws = sheet.worksheet("Festivals")
+    festival = next((f for f in festivals_ws.get_all_records() if f.get("name") == req.festival_name), None)
+
+    video_path = generate_video(customer, req.festival_name, next_photo_idx, festival)
     if not video_path:
         raise HTTPException(status_code=500, detail="Video generation failed. Check server logs.")
 
@@ -417,11 +451,17 @@ def send_whatsapp_direct(
     from video_engine import generate_video, get_next_photo_index
     from scheduler import upload_video_to_meta, send_whatsapp_video
 
+    logs_ws = sheet.worksheet("Video Logs")
+    festivals_ws = sheet.worksheet("Festivals")
+    festivals = festivals_ws.get_all_records()
+    festival_match = next((f for f in festivals if f.get("name") == req.festival_name), None)
+    festival_id = festival_match.get("festival_id") if festival_match else "manual"
+
     last_used_photo = int(customer.get("last_used_photo") or 0)
     next_photo_idx = get_next_photo_index(last_used_photo)
 
     # Generate video
-    video_path = generate_video(customer, req.festival_name, next_photo_idx)
+    video_path = generate_video(customer, req.festival_name, next_photo_idx, festival_match)
     if not video_path:
         raise HTTPException(status_code=500, detail="Video generation failed. Check that customer photos are accessible.")
 
@@ -439,13 +479,6 @@ def send_whatsapp_direct(
     success = send_whatsapp_video(customer.get("whatsapp"), media_id, template_name=req.template_name)
     if os.path.exists(video_path):
         os.remove(video_path)
-
-    # Log the attempt regardless of success/failure
-    logs_ws = sheet.worksheet("Video Logs")
-    festivals_ws = sheet.worksheet("Festivals")
-    festivals = festivals_ws.get_all_records()
-    festival_match = next((f for f in festivals if f.get("name") == req.festival_name), None)
-    festival_id = festival_match.get("festival_id") if festival_match else "manual"
 
     log_id = str(uuid.uuid4())
     logs_ws.append_row([
@@ -531,7 +564,7 @@ def bulk_generate_videos(
 
         last_used  = int(customer.get("last_used_photo") or 0)
         next_idx   = get_next_photo_index(last_used)
-        video_path = generate_video(customer, req.festival_name, next_idx)
+        video_path = generate_video(customer, req.festival_name, next_idx, festival_match)
 
         if not video_path:
             results.append({"customer_id": cid, "company_name": customer.get("company_name"),

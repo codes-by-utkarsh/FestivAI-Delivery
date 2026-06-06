@@ -246,7 +246,7 @@ def build_branded_frame(
 # ── Video generator ───────────────────────────────────────────────────────────
 
 def generate_video(customer_data: dict, festival_name: str,
-                   photo_index: int) -> Optional[str]:
+                   photo_index: int, festival_data: dict = None) -> Optional[str]:
     """
     Generate a branded festival greeting MP4 for one customer.
     Returns the output file path, or None on failure.
@@ -255,11 +255,15 @@ def generate_video(customer_data: dict, festival_name: str,
         tmp_dir   = tempfile.mkdtemp(prefix="festivai_")
         W, H      = CONFIG["width"], CONFIG["height"]
         fps       = CONFIG["fps"]
-        duration  = 22.0   # seconds
+        duration  = 30.0   # seconds
 
         # ── Pick photo ────────────────────────────────────────────────────────
         photo_key      = f"photo{photo_index}"
         photo_src      = customer_data.get(photo_key) or ""
+        
+        if festival_data and festival_data.get("template_url"):
+            photo_src = festival_data.get("template_url")
+            
         photo_path     = os.path.join(tmp_dir, "bg_photo.jpg")
         actual_photo   = get_image(photo_src, photo_path)
 
