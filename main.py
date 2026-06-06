@@ -270,8 +270,11 @@ def create_customer(
 
     # Validate WhatsApp number format
     wa_number = whatsapp.strip().replace("+", "").replace(" ", "").replace("-", "")
+    if wa_number.isdigit() and len(wa_number) == 10:
+        wa_number = "91" + wa_number
+        
     if not wa_number.isdigit() or len(wa_number) < 10:
-        raise HTTPException(status_code=400, detail="Invalid WhatsApp number. Use format: 919876543210")
+        raise HTTPException(status_code=400, detail="Invalid WhatsApp number. Provide at least 10 digits.")
 
     # Save logo
     logo_ext = os.path.splitext(logo.filename)[1] if logo.filename else ".jpg"
