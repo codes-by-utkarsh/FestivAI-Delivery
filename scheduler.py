@@ -44,7 +44,7 @@ def upload_video_to_meta(video_path: str) -> str:
         logger.error(f"Media upload exception: {e}")
         return None
 
-def send_whatsapp_video(whatsapp_number: str, media_id: str, template_name: str = "hello_world") -> bool:
+def send_whatsapp_video(whatsapp_number: str, media_id: str, template_name: str = "festival_greeting") -> bool:
     WHATSAPP_API_URL = os.getenv("WHATSAPP_API_URL")
     WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
     if not WHATSAPP_API_URL or not WHATSAPP_TOKEN:

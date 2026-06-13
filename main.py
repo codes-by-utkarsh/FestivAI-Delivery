@@ -54,7 +54,7 @@ class RegisterData(BaseModel):
 class SendWhatsAppRequest(BaseModel):
     customer_id: Union[str, int]
     festival_name: str
-    template_name: str = "hello_world"
+    template_name: str = "festival_greeting"
 
 class GenerateVideoRequest(BaseModel):
     customer_id: Union[str, int]
@@ -64,7 +64,7 @@ class BulkGenerateRequest(BaseModel):
     customer_ids: List[Union[str, int]]
     festival_name: str
     send_whatsapp: bool = False
-    template_name: str = "hello_world"
+    template_name: str = "festival_greeting"
 
 class AddFestivalRequest(BaseModel):
     name: str
