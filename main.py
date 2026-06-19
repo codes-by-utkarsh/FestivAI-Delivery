@@ -71,6 +71,9 @@ class AddFestivalRequest(BaseModel):
     date: str          # YYYY-MM-DD
     type: str = "Custom"
 
+class TemplateLinkRequest(BaseModel):
+    template_url: str
+
 
 # ─── Startup ──────────────────────────────────────────────────────────────────
 
@@ -372,6 +375,31 @@ def upload_festival_template(
     festivals_ws.update_cell(row_idx, 5, t_url)
     
     return {"message": "Template uploaded successfully.", "template_url": t_url}
+
+
+@app.post("/festivals/{festival_id}/template-link", dependencies=[Depends(require_role(["Admin", "Agent"]))])
+def save_festival_template_link(
+    festival_id: str,
+    req: TemplateLinkRequest,
+    current_user: dict = Depends(require_role(["Admin", "Agent"]))
+):
+    sheet = init_db()
+    festivals_ws = sheet.worksheet("Festivals")
+    festivals = festivals_ws.get_all_records()
+    
+    row_idx = None
+    for idx, f in enumerate(festivals):
+        if str(f.get("festival_id")) == festival_id:
+            row_idx = idx + 2
+            break
+            
+    if not row_idx:
+        raise HTTPException(status_code=404, detail="Festival not found.")
+        
+    festivals_ws.update_cell(1, 5, "template_url")
+    festivals_ws.update_cell(row_idx, 5, req.template_url)
+    
+    return {"message": "Template link saved successfully.", "template_url": req.template_url}
 
 
 # ─── Video Generation ─────────────────────────────────────────────────────────

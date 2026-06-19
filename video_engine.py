@@ -81,6 +81,14 @@ def load_font(path: str, size: int) -> ImageFont.FreeTypeFont:
 def get_image(url_or_path: str, save_path: Optional[str] = None) -> Optional[str]:
     if not url_or_path:
         return None
+        
+    import re
+    if "drive.google.com" in url_or_path:
+        match = re.search(r'/d/([a-zA-Z0-9_-]+)', url_or_path)
+        if match:
+            file_id = match.group(1)
+            url_or_path = f"https://drive.google.com/uc?export=download&id={file_id}"
+
     if url_or_path.startswith("http"):
         if not save_path:
             save_path = f"temp_image_{uuid.uuid4().hex}.jpg"

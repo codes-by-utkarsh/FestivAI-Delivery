@@ -49,6 +49,7 @@ export default function App() {
 
   // Festival Management
   const [isAddFestivalOpen, setIsAddFestivalOpen] = useState(false)
+  const [templateModalFestivalId, setTemplateModalFestivalId] = useState(null)
 
   // Toast Notifications
   const [toasts, setToasts] = useState([])
@@ -392,11 +393,36 @@ export default function App() {
       if (res.ok) {
         showToast('Template uploaded & saved successfully! ✅', 'success')
         fetchAllData()
+        setTemplateModalFestivalId(null)
       } else {
         const err = await res.json()
         showToast(`Upload failed: ${err.detail}`, 'error')
       }
     } catch { showToast('Network error during upload.', 'error') }
+  }
+
+  const handleTemplateLinkUpload = async (e) => {
+    e.preventDefault()
+    if (!templateModalFestivalId) return
+    const link = e.target.drive_link.value
+    if (!link) return
+    
+    showToast(`Saving Google Drive link... ⏳`, 'info')
+    try {
+      const res = await fetch(`${API_BASE}/festivals/${templateModalFestivalId}/template-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ template_url: link })
+      })
+      if (res.ok) {
+        showToast('Template link saved successfully! ✅', 'success')
+        fetchAllData()
+        setTemplateModalFestivalId(null)
+      } else {
+        const err = await res.json()
+        showToast(`Save failed: ${err.detail}`, 'error')
+      }
+    } catch { showToast('Network error during save.', 'error') }
   }
 
   const handleAddFestival = async (e) => {
@@ -1184,10 +1210,9 @@ export default function App() {
                                   <i className={`fa-solid ${f.isPublic ? 'fa-earth-americas text-blue-500' : 'fa-wand-magic-sparkles text-orange-500'}`}></i> {f.name}
                                 </div>
                                 {!f.isPublic && (
-                                  <label className="cursor-pointer text-orange-400 hover:text-orange-700 shrink-0 ml-1" title={f.template_url ? "Update Template PNG" : "Upload Template PNG"}>
+                                  <button onClick={() => setTemplateModalFestivalId(f.festival_id)} className="cursor-pointer text-orange-400 hover:text-orange-700 shrink-0 ml-1" title={f.template_url ? "Update Template" : "Upload Template"}>
                                     <i className={`fa-solid ${f.template_url ? 'fa-image text-green-600' : 'fa-upload'}`}></i>
-                                    <input type="file" className="hidden" accept="image/png, image/jpeg" onChange={(e) => handleTemplateUpload(e, f.festival_id)} />
-                                  </label>
+                                  </button>
                                 )}
                               </div>
                             ))}
@@ -1274,6 +1299,51 @@ export default function App() {
 
         </div>
       </div>
+
+      {/* TEMPLATE UPLOAD MODAL */}
+      {templateModalFestivalId && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <h3 className="font-bold text-xl text-slate-900">Upload Template</h3>
+              <button onClick={() => setTemplateModalFestivalId(null)} className="w-8 h-8 rounded flex items-center justify-center hover:bg-slate-100 text-slate-400"><i className="fa-solid fa-xmark"></i></button>
+            </div>
+            <div className="p-6 space-y-6">
+              
+              {/* Option 1: Local File */}
+              <div>
+                <h4 className="font-bold text-slate-800 mb-3"><i className="fa-solid fa-desktop mr-1.5 text-orange-500"></i> From Computer</h4>
+                <div className="p-5 border-2 border-dashed border-gray-200 rounded-xl bg-slate-50 text-center hover:bg-slate-100 transition-colors">
+                  <label className="cursor-pointer inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-bold shadow transition-colors">
+                    <i className="fa-solid fa-upload"></i> Choose Local PNG
+                    <input type="file" className="hidden" accept="image/png, image/jpeg" onChange={(e) => handleTemplateUpload(e, templateModalFestivalId)} />
+                  </label>
+                  <p className="text-xs text-slate-400 mt-3">Upload a PNG or JPEG file (Max 5MB)</p>
+                </div>
+              </div>
+              
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-gray-200"></div>
+                <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-bold uppercase tracking-wider">Or</span>
+                <div className="flex-grow border-t border-gray-200"></div>
+              </div>
+
+              {/* Option 2: Google Drive Link */}
+              <form onSubmit={handleTemplateLinkUpload}>
+                <h4 className="font-bold text-slate-800 mb-3"><i className="fa-brands fa-google-drive mr-1.5 text-blue-500"></i> Google Drive Link</h4>
+                <div className="flex gap-2">
+                  <input name="drive_link" placeholder="Paste link here..." className="flex-1 bg-slate-50 border border-gray-200 p-2.5 rounded-lg text-sm outline-none focus:border-blue-500" required/>
+                  <button type="submit" className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-bold shadow transition-colors whitespace-nowrap">Save</button>
+                </div>
+                <p className="text-xs text-slate-400 mt-3 leading-relaxed">
+                  Make sure the link sharing is set to <strong className="text-slate-600">"Anyone with the link can view"</strong>.
+                </p>
+              </form>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL */}
       {isModalOpen && (
