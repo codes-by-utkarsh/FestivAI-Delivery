@@ -1,4 +1,4 @@
-# SimplyPromised - Festival Video Marketing Hub
+# Festival Video Marketing Hub
 
 A full-stack platform that enables agencies to onboard businesses and automatically generate and deliver personalized festival greeting videos directly to business owners via WhatsApp.
 
