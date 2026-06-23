@@ -19,7 +19,7 @@ A full-stack platform that enables agencies to onboard businesses and automatica
 2.  **Python** (v3.10+) for the backend.
 3.  **ImageMagick**: Required by MoviePy to render text overlays in videos.
     *   **Windows**: Download and install [ImageMagick](https://imagemagick.org/script/download.php). Make sure to check the box "Install legacy utilities (e.g. convert)" during installation.
-    *   **Linux/Mac**: `sudo apt install imagemagick` or `brew install imagemagick`.
+    
 
 ---
 
